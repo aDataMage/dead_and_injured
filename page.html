@@ -71,18 +71,34 @@
   .restart:hover { color: var(--ink); border-color: var(--ink); }
   .side { max-width: 360px; padding: 22px; }
   .side h2 { margin: 0 0 4px; font-size: 18px; }
-  .side .sub { margin-bottom: 14px; font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; padding: 0 4px 6px; }
-  td { border-top: 1px solid var(--line); padding: 5px 4px; vertical-align: top; text-align: center; }
-  td.dg {
-    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 16px; font-weight: 700;
-    width: 28px; text-align: left;
+  .side h3 { margin: 22px 0 4px; font-size: 14px; }
+  .side .sub { margin-bottom: 12px; font-size: 13px; }
+  .key { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .key span::before {
+    content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+    margin-right: 5px; vertical-align: -1px; background: var(--c);
   }
-  tr.unplayed td.dg { color: var(--muted); font-weight: 400; }
-  .o { display: block; white-space: nowrap; font-weight: 600; line-height: 1.6; }
-  .o .d { color: var(--dead); } .o .i { color: var(--hurt); }
-  .none { color: var(--line); }
+  .marks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .side button.m, .side button.cell {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 18px; font-weight: 700;
+    padding: 0; height: 40px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink);
+  }
+  .side button.m.green { background: var(--win); border-color: var(--win); color: var(--card); }
+  .side button.m.yellow { background: var(--hurt); border-color: var(--hurt); color: var(--card); }
+  .side button.m.red { background: var(--dead); border-color: var(--dead); color: var(--card); }
+  .grid { display: grid; grid-template-columns: 24px repeat(4, 1fr); gap: 4px; align-items: center; }
+  .grid .h { text-align: center; font-size: 12px; color: var(--muted); }
+  .grid .rl { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }
+  .side button.cell { height: 28px; font-size: 14px; color: transparent; }
+  .side button.cell.out { opacity: .35; }
+  .side button.cell.locked { background: var(--win); border-color: var(--win); color: var(--card); opacity: 1; }
+  .answer { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .answer .digit { width: 36px; }
+  .answer .digit.empty { color: var(--muted); }
+  .side button.small { font-size: 13px; padding: 8px 12px; margin-left: auto; }
+  .side button.small:disabled { opacity: .4; cursor: default; }
+  .side .clear { display: block; margin-top: 18px; font-size: 12px; color: var(--muted); background: none; padding: 0; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -123,17 +139,100 @@
 </main>
 
 <aside class="card side">
-  <h2>Number history</h2>
-  <p class="sub">Each cell shows the result of every guess that had that digit in that position.</p>
-  <table>
-    <tr><th></th><th>1st</th><th>2nd</th><th>3rd</th><th>4th</th></tr>
-    {{range .Board}}
-    <tr class="{{if not .Played}}unplayed{{end}}">
-      <td class="dg">{{.Digit}}</td>
-      {{range .Cells}}<td>{{range .}}<span class="o"><span class="d">{{.Dead}}D</span> <span class="i">{{.Injured}}I</span></span>{{else}}<span class="none">·</span>{{end}}</td>{{end}}
-    </tr>
-    {{end}}
-  </table>
+  <h2>Notes</h2>
+  <p class="sub">Only you see these. They reset when you start a new game.</p>
+
+  <h3>Digits</h3>
+  <div class="key"><span style="--c:var(--win)">Right place</span><span style="--c:var(--hurt)">In, wrong place</span><span style="--c:var(--dead)">Out</span></div>
+  <p class="sub">Click a digit to cycle: green, yellow, red, clear.</p>
+  <div class="marks" id="marks"></div>
+
+  <h3>Positions</h3>
+  <p class="sub">Click a square to lock that digit into that position. Click it again to unlock.</p>
+  <div class="grid" id="grid"></div>
+  <div class="answer">
+    <span class="digits" id="answer"></span>
+    <button class="small" id="use" type="button">Use as guess</button>
+  </div>
+
+  <button class="clear" id="clear" type="button">Clear notes</button>
 </aside>
+
+<script>
+(function () {
+  var key = "dai-notes-{{.Game}}";
+  var cycle = ["", "green", "yellow", "red"];
+  var notes = { marks: Array(10).fill(""), lock: [null, null, null, null] };
+  try {
+    var saved = JSON.parse(localStorage.getItem(key));
+    if (saved) notes = saved;
+    for (var k in localStorage) if (k.indexOf("dai-notes-") === 0 && k !== key) localStorage.removeItem(k);
+  } catch (e) {}
+
+  function save() { try { localStorage.setItem(key, JSON.stringify(notes)); } catch (e) {} }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function render() {
+    var marks = document.getElementById("marks"), grid = document.getElementById("grid"), ans = document.getElementById("answer");
+    marks.innerHTML = ""; grid.innerHTML = ""; ans.innerHTML = "";
+
+    for (var d = 0; d < 10; d++) {
+      var b = el("button", "m " + notes.marks[d], d);
+      b.type = "button";
+      b.onclick = (function (d) { return function () {
+        notes.marks[d] = cycle[(cycle.indexOf(notes.marks[d]) + 1) % cycle.length];
+        save(); render();
+      }; })(d);
+      marks.appendChild(b);
+    }
+
+    grid.appendChild(el("span"));
+    ["1st", "2nd", "3rd", "4th"].forEach(function (t) { grid.appendChild(el("span", "h", t)); });
+    for (var d = 0; d < 10; d++) {
+      grid.appendChild(el("span", "rl", d));
+      for (var p = 0; p < 4; p++) {
+        var c = el("button", "cell", d);
+        c.type = "button";
+        c.setAttribute("aria-label", "Lock " + d + " in position " + (p + 1));
+        if (notes.lock[p] === d) c.classList.add("locked");
+        else if (notes.marks[d] === "red") c.classList.add("out");
+        c.onclick = (function (d, p) { return function () {
+          if (notes.lock[p] === d) { notes.lock[p] = null; }
+          else {
+            // A digit can only sit in one position, and a position holds one digit.
+            notes.lock = notes.lock.map(function (x) { return x === d ? null : x; });
+            notes.lock[p] = d;
+            notes.marks[d] = "green";
+          }
+          save(); render();
+        }; })(d, p);
+        grid.appendChild(c);
+      }
+    }
+
+    var full = true;
+    notes.lock.forEach(function (x) {
+      ans.appendChild(el("span", "digit" + (x === null ? " empty" : ""), x === null ? "?" : x));
+      if (x === null) full = false;
+    });
+    var input = document.querySelector("input[name=guess]");
+    var use = document.getElementById("use");
+    use.disabled = !full || !input;
+    use.onclick = function () { input.value = notes.lock.join(""); input.focus(); };
+  }
+
+  document.getElementById("clear").onclick = function () {
+    notes = { marks: Array(10).fill(""), lock: [null, null, null, null] };
+    save(); render();
+  };
+  render();
+})();
+</script>
 </body>
 </html>

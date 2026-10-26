@@ -19,41 +19,19 @@ type row struct {
 	Dead, Injured int
 }
 
-type outcome struct{ Dead, Injured int }
-
-// digitRow is one line of the side panel: every result a digit was part of, by position.
-type digitRow struct {
-	Digit  int
-	Played bool
-	Cells  [4][]outcome
-}
-
+var game int
 var secret string
 var rows []row
 var won bool
 
 func newGame() {
+	game++
 	secret = ""
 	for _, d := range rand.Perm(10)[:4] {
 		secret += fmt.Sprint(d)
 	}
 	rows = nil
 	won = false
-}
-
-func board() []digitRow {
-	b := make([]digitRow, 10)
-	for d := range b {
-		b[d].Digit = d
-	}
-	for _, r := range rows {
-		for p, s := range r.Digits {
-			d := s[0] - '0'
-			b[d].Played = true
-			b[d].Cells[p] = append(b[d].Cells[p], outcome{r.Dead, r.Injured})
-		}
-	}
-	return b
 }
 
 func isGuess(s string) bool {
@@ -94,7 +72,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
-	page.Execute(w, map[string]any{"Rows": rows, "Won": won, "Secret": secret, "Board": board()})
+	page.Execute(w, map[string]any{"Rows": rows, "Won": won, "Secret": secret, "Game": game})
 }
 
 func main() {
