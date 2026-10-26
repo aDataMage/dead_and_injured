@@ -92,6 +92,9 @@
     font-size: 13px; padding: 6px 12px; margin-top: 4px; background: transparent; color: var(--muted);
     border: 1px solid var(--line);
   }
+  a.restart { display: inline-block; text-decoration: none; }
+  .room { font-size: 14px; margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
+  .win.lost { background: var(--dead-bg); color: var(--dead); }
   .restart:hover { color: var(--ink); border-color: var(--ink); }
   .side { max-width: 360px; padding: 22px; }
   .side h2 { margin: 0 0 4px; font-size: 18px; }
@@ -131,18 +134,30 @@
 <main class="card">
   <div class="top">
     <h1>Dead &amp; Injured</h1>
-    {{if .Rows}}{{if not .Won}}<form style="margin:0"><button class="restart" name="new" value="1">Restart</button></form>{{end}}{{end}}
+    <div>
+      <a class="restart" href="/">Menu</a>
+      {{if not .Room}}{{if .Rows}}{{if not .Over}}<form style="margin:0;display:inline"><button class="restart" name="new" value="1">Restart</button></form>{{end}}{{end}}{{end}}
+    </div>
   </div>
   <p class="sub">Guess the 4 different digits.
     <b class="d">Dead</b> = right digit, right place.
     <b class="i">Injured</b> = right digit, wrong place.</p>
 
-  {{if .Won}}
-  <div class="win">
-    <h2>You got it!</h2>
+  {{if .Room}}
+  <p class="room">Room <b>{{.Room}}</b>
+    {{if .Waiting}}· Waiting for your opponent to join. Tell them to pick “Join room” and enter <b>{{.Room}}</b>.
+    {{else}}· Opponent has made <b id="opp">{{.OppGuesses}}</b> guesses.{{end}}</p>
+  {{end}}
+
+  {{if .Over}}
+  <div class="win{{if .Lost}} lost{{end}}">
+    {{if .Won}}<h2>You got it!</h2>
     <p>The number was <b>{{.Secret}}</b>, found in {{len .Rows}} guesses.</p>
-    <form style="justify-content:center;margin:0"><button name="new" value="1" autofocus>Play again</button></form>
+    {{else}}<h2>Your opponent got it first</h2>
+    <p>They cracked <b>{{.Secret}}</b> in {{.WinnerGuesses}} guesses.</p>{{end}}
+    <form style="justify-content:center;margin:0"><button name="new" value="1" autofocus>{{if .Room}}Rematch{{else}}Play again{{end}}</button></form>
   </div>
+  {{else if .Waiting}}
   {{else}}
   <form id="play" autocomplete="off">
     <input type="hidden" name="guess" id="guess">
@@ -199,7 +214,7 @@
 
 <script>
 (function () {
-  var game = "{{.Game}}";
+  var scope = "{{.Scope}}", game = scope + "-{{.Game}}";
   var history = ({{.Rows}} || []).map(function (r) { return r.Digits.join(""); });
 
   function load(k, fallback) { try { var v = JSON.parse(localStorage.getItem(k)); return v === null ? fallback : v; } catch (e) { return fallback; } }
@@ -207,7 +222,10 @@
   try {
     // Forget notes and locks from earlier games.
     Object.keys(localStorage).forEach(function (k) {
-      if (/^dai-(notes|slots)-\d+$/.test(k) && k.split("-")[2] !== game) localStorage.removeItem(k);
+      ["notes", "slots"].forEach(function (kind) {
+        var prefix = "dai-" + kind + "-" + scope + "-";
+        if (k.indexOf(prefix) === 0 && k !== prefix + "{{.Game}}") localStorage.removeItem(k);
+      });
     });
   } catch (e) {}
 
@@ -401,6 +419,18 @@
 
   document.getElementById("clear").onclick = function () { notes = blankNotes(); saveNotes(); renderNotes(); };
   renderNotes();
+
+  // In a room, watch for the opponent joining, guessing, or winning.
+  {{if .Room}}
+  var seen = "{{.Game}},{{not .Waiting}},{{.Over}}";
+  setInterval(function () {
+    fetch(location.pathname + "/state").then(function (r) { return r.json(); }).then(function (s) {
+      if ([s.game, s.players === 2, s.winner >= 0].join() !== seen) location.reload();
+      var opp = document.getElementById("opp");
+      if (opp) opp.textContent = s.guesses - history.length;
+    }).catch(function () {});
+  }, 1500);
+  {{end}}
 
   // Keep the newest guess in view.
   var rowsEl = document.getElementById("rows");
