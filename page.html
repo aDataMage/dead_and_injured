@@ -29,18 +29,44 @@
   h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -0.5px; }
   .sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.5; }
   .sub b.d { color: var(--dead); } .sub b.i { color: var(--hurt); }
-  form { display: flex; gap: 8px; margin-bottom: 20px; }
-  input {
-    flex: 1; min-width: 0; font-size: 24px; letter-spacing: 12px; text-align: center;
-    font-family: ui-monospace, Menlo, Consolas, monospace; padding: 12px;
-    border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink);
-  }
-  input:focus { outline: none; border-color: var(--accent); }
+  form { margin: 0; }
   button {
     font-size: 16px; font-weight: 600; padding: 12px 20px; border: 0; border-radius: 10px;
     background: var(--accent); color: var(--card); cursor: pointer;
   }
-  .rows { display: flex; flex-direction: column; gap: 8px; }
+  button:disabled { opacity: .35; cursor: default; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
+  .slot {
+    position: relative; height: 60px; padding: 0; font-size: 30px; font-weight: 700;
+    background: var(--bg); color: var(--ink); border: 2px solid var(--line);
+  }
+  .slot.next { border-color: var(--accent); }
+  .slot.locked { background: var(--accent); color: var(--card); border-color: var(--accent); }
+  .slot.locked::after {
+    content: "locked"; position: absolute; left: 0; right: 0; bottom: 3px;
+    font: 600 9px system-ui, sans-serif; letter-spacing: 1px; text-transform: uppercase; opacity: .7;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; text-align: center; }
+  .keypad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px; }
+  .keypad button, .tools button {
+    padding: 0; height: 44px; font-size: 20px; background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  }
+  .tools { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 6px; margin-bottom: 8px; }
+  .tools button { font-size: 14px; }
+  .submit { width: 100%; }
+  .submit.warn { background: var(--hurt); }
+  .msg { min-height: 0; margin: 8px 0 0; font-size: 13px; line-height: 1.45; border-radius: 8px; }
+  .msg:not(:empty) { padding: 10px 12px; }
+  .msg.err { background: var(--dead-bg); color: var(--dead); }
+  .msg.warn { background: var(--hurt-bg); color: var(--ink); }
+  .settings { margin: 14px 0 20px; font-size: 13px; color: var(--muted); }
+  .settings summary { cursor: pointer; }
+  .settings label { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .rows {
+    display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;
+    padding-right: 4px; border-top: 1px solid var(--line); padding-top: 14px;
+  }
   .row { display: flex; align-items: center; gap: 12px; }
   .n { width: 22px; color: var(--muted); font-size: 13px; text-align: right; }
   .digits { display: flex; gap: 4px; }
@@ -91,7 +117,9 @@
   .grid .h { text-align: center; font-size: 12px; color: var(--muted); }
   .grid .rl { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }
   .side button.cell { height: 28px; font-size: 14px; color: transparent; }
+  .side button.cell.no { color: var(--dead); background: var(--dead-bg); border-color: var(--dead-bg); font-size: 13px; }
   .side button.cell.out { opacity: .35; }
+  .side button.cell.no.out { opacity: .35; }
   .side button.cell.locked { background: var(--win); border-color: var(--win); color: var(--card); opacity: 1; }
   .answer { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
   .answer .digit { width: 36px; }
@@ -118,13 +146,27 @@
     <form style="justify-content:center;margin:0"><button name="new" value="1" autofocus>Play again</button></form>
   </div>
   {{else}}
-  <form autocomplete="off">
-    <input name="guess" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="····" required autofocus>
-    <button>Guess</button>
+  <form id="play" autocomplete="off">
+    <input type="hidden" name="guess" id="guess">
+    <div class="slots mono" id="slots"></div>
+    <p class="hint">Tap a filled box to lock it. Locked digits stay for your next guess.</p>
+    <div class="keypad mono" id="keypad"></div>
+    <div class="tools">
+      <button type="button" id="undo" title="Backspace">⌫ Undo</button>
+      <button type="button" id="clearSlots" title="Esc">Clear</button>
+      <button type="button" id="reuse">↺ Last guess</button>
+    </div>
+    <button class="submit" id="submit">Guess</button>
+    <p class="msg" id="msg"></p>
   </form>
+  <details class="settings">
+    <summary>Settings</summary>
+    <label><input type="checkbox" id="optNoRepeat"> Block guesses with repeated digits</label>
+    <label><input type="checkbox" id="optWarn"> Warn when a guess contradicts earlier results</label>
+  </details>
   {{end}}
 
-  <div class="rows">
+  <div class="rows" id="rows">
     {{range $r := .Rows}}
     <div class="row">
       <span class="n">{{$r.N}}</span>
@@ -148,7 +190,7 @@
   <div class="marks" id="marks"></div>
 
   <h3>Positions</h3>
-  <p class="sub">Click a square to lock that digit into that position. Click it again to unlock.</p>
+  <p class="sub">Click a square to cycle: <b style="color:var(--dead)">✕</b> not here, then <b style="color:var(--win)">locked</b> here, then clear.</p>
   <div class="grid" id="grid"></div>
   <div class="answer">
     <span class="digits" id="answer"></span>
@@ -160,16 +202,17 @@
 
 <script>
 (function () {
-  var key = "dai-notes-{{.Game}}";
-  var cycle = ["", "green", "yellow", "red"];
-  var notes = { marks: Array(10).fill(""), lock: [null, null, null, null] };
-  try {
-    var saved = JSON.parse(localStorage.getItem(key));
-    if (saved) notes = saved;
-    for (var k in localStorage) if (k.indexOf("dai-notes-") === 0 && k !== key) localStorage.removeItem(k);
-  } catch (e) {}
+  var game = "{{.Game}}";
+  var history = ({{.Rows}} || []).map(function (r) { return { guess: r.Digits.join(""), dead: r.Dead, injured: r.Injured }; });
 
-  function save() { try { localStorage.setItem(key, JSON.stringify(notes)); } catch (e) {} }
+  function load(k, fallback) { try { var v = JSON.parse(localStorage.getItem(k)); return v === null ? fallback : v; } catch (e) { return fallback; } }
+  function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  try {
+    // Forget notes and locks from earlier games.
+    Object.keys(localStorage).forEach(function (k) {
+      if (/^dai-(notes|slots)-\d+$/.test(k) && k.split("-")[2] !== game) localStorage.removeItem(k);
+    });
+  } catch (e) {}
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -178,7 +221,158 @@
     return e;
   }
 
+  // Same rule the server uses: dead = same place, injured = in the number elsewhere.
+  function score(secret, guess) {
+    var d = 0, i = 0;
+    for (var k = 0; k < 4; k++) {
+      if (guess[k] === secret[k]) d++;
+      else if (secret.indexOf(guess[k]) >= 0) i++;
+    }
+    return [d, i];
+  }
+
+  /* ---------- guess input ---------- */
+  var settings = load("dai-settings", { noRepeat: true, warn: true });
+  var slotsKey = "dai-slots-" + game;
+  var saved = load(slotsKey, null);
+  // Only locked slots carry over to the next guess.
+  var slots = [0, 1, 2, 3].map(function (k) {
+    return saved && saved[k] && saved[k].locked ? saved[k] : { d: "", locked: false };
+  });
+  var undoStack = [];
+  var armed = false; // true after a contradiction warning, so the next press submits
+
+  var form = document.getElementById("play");
+  if (form) {
+    var slotsEl = document.getElementById("slots"), keypad = document.getElementById("keypad");
+    var msg = document.getElementById("msg"), submit = document.getElementById("submit");
+    var optNoRepeat = document.getElementById("optNoRepeat"), optWarn = document.getElementById("optWarn");
+    optNoRepeat.checked = settings.noRepeat; optWarn.checked = settings.warn;
+    optNoRepeat.onchange = optWarn.onchange = function () {
+      settings = { noRepeat: optNoRepeat.checked, warn: optWarn.checked };
+      store("dai-settings", settings); changed();
+    };
+
+    for (var k = 1; k <= 10; k++) {
+      var d = String(k % 10), b = el("button", "", d);
+      b.type = "button"; b.dataset.d = d;
+      b.onclick = function () { type(this.dataset.d); };
+      keypad.appendChild(b);
+    }
+    document.getElementById("undo").onclick = undo;
+    document.getElementById("clearSlots").onclick = clearSlots;
+    var reuse = document.getElementById("reuse");
+    reuse.disabled = history.length === 0;
+    reuse.onclick = function () {
+      var last = history[history.length - 1].guess;
+      var before = snapshot();
+      slots.forEach(function (s, k) { if (!s.locked) s.d = last[k]; });
+      pushUndo(before); changed();
+    };
+
+    document.addEventListener("keydown", function (e) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (/^[0-9]$/.test(e.key)) { type(e.key); e.preventDefault(); }
+      else if (e.key === "Backspace") { undo(); e.preventDefault(); }
+      else if (e.key === "Escape") { clearSlots(); }
+      // Enter always submits, even if a keypad or tool button still has focus.
+      else if (e.key === "Enter" && e.target.tagName !== "SUMMARY") { form.requestSubmit(); e.preventDefault(); }
+    });
+
+    form.onsubmit = function (e) {
+      var g = slots.map(function (s) { return s.d; }).join("");
+      var problem = check(g);
+      if (problem.block) { e.preventDefault(); show("err", problem.block); return; }
+      if (problem.warn && !armed) {
+        e.preventDefault(); armed = true;
+        show("warn", problem.warn + " Press “Guess anyway” to send it.");
+        submit.textContent = "Guess anyway"; submit.classList.add("warn");
+        return;
+      }
+      document.getElementById("guess").value = g;
+      store(slotsKey, slots);
+    };
+    render();
+  }
+
+  function snapshot() { return JSON.stringify(slots); }
+  function pushUndo(before) { if (before !== snapshot()) undoStack.push(before); }
+
+  function type(d) {
+    var k = slots.findIndex(function (s) { return !s.locked && s.d === ""; });
+    if (k < 0) return;
+    var before = snapshot();
+    slots[k].d = d; pushUndo(before); changed();
+  }
+  function undo() {
+    if (undoStack.length) { slots = JSON.parse(undoStack.pop()); }
+    else {
+      // Nothing to undo yet: remove the last unlocked digit instead.
+      for (var k = 3; k >= 0; k--) if (!slots[k].locked && slots[k].d) { slots[k].d = ""; break; }
+    }
+    changed();
+  }
+  function clearSlots() {
+    var before = snapshot();
+    slots.forEach(function (s) { if (!s.locked) s.d = ""; });
+    pushUndo(before); changed();
+  }
+  function toggleLock(k) {
+    if (!slots[k].d && !slots[k].locked) return;
+    var before = snapshot();
+    slots[k].locked = !slots[k].locked;
+    pushUndo(before); changed();
+  }
+
+  function check(g) {
+    if (g.length < 4) return { block: "Fill all 4 boxes first." };
+    if (settings.noRepeat && new Set(g).size < 4) return { block: "Each digit can only be used once. Turn this off in Settings." };
+    if (settings.warn) {
+      for (var k = 0; k < history.length; k++) {
+        var h = history[k], s = score(g, h.guess);
+        if (s[0] !== h.dead || s[1] !== h.injured) {
+          return { warn: "This can’t be the answer: guess " + (k + 1) + " (" + h.guess + ") got " + h.dead + " dead, " + h.injured +
+            " injured, but if the answer were " + g + " it would have got " + s[0] + " dead, " + s[1] + " injured." };
+        }
+      }
+    }
+    return {};
+  }
+
+  function show(kind, text) { msg.className = "msg " + kind; msg.textContent = text; }
+
+  function changed() {
+    armed = false; submit.textContent = "Guess"; submit.classList.remove("warn"); show("", "");
+    store(slotsKey, slots); render();
+  }
+
   function render() {
+    slotsEl.innerHTML = "";
+    var next = slots.findIndex(function (s) { return !s.locked && s.d === ""; });
+    slots.forEach(function (s, k) {
+      var b = el("button", "slot" + (s.locked ? " locked" : "") + (k === next ? " next" : ""), s.d);
+      b.type = "button";
+      b.setAttribute("aria-label", "Position " + (k + 1) + (s.d ? ", " + s.d : ", empty") + (s.locked ? ", locked" : ""));
+      b.onclick = function () { toggleLock(k); };
+      slotsEl.appendChild(b);
+    });
+    var used = slots.map(function (s) { return s.d; });
+    keypad.querySelectorAll("button").forEach(function (b) {
+      b.disabled = next < 0 || (settings.noRepeat && used.indexOf(b.dataset.d) >= 0);
+    });
+  }
+
+  /* ---------- notes ---------- */
+  var notesKey = "dai-notes-" + game;
+  var cycle = ["", "green", "yellow", "red"];
+  function blankNotes() {
+    return { marks: Array(10).fill(""), lock: [null, null, null, null], no: Array.from({ length: 10 }, function () { return [false, false, false, false]; }) };
+  }
+  var notes = load(notesKey, blankNotes());
+  if (!notes.no) notes.no = blankNotes().no;
+  function saveNotes() { store(notesKey, notes); }
+
+  function renderNotes() {
     var marks = document.getElementById("marks"), grid = document.getElementById("grid"), ans = document.getElementById("answer");
     marks.innerHTML = ""; grid.innerHTML = ""; ans.innerHTML = "";
 
@@ -187,7 +381,7 @@
       b.type = "button";
       b.onclick = (function (d) { return function () {
         notes.marks[d] = cycle[(cycle.indexOf(notes.marks[d]) + 1) % cycle.length];
-        save(); render();
+        saveNotes(); renderNotes();
       }; })(d);
       marks.appendChild(b);
     }
@@ -197,20 +391,24 @@
     for (var d = 0; d < 10; d++) {
       grid.appendChild(el("span", "rl", d));
       for (var p = 0; p < 4; p++) {
-        var c = el("button", "cell", d);
+        var locked = notes.lock[p] === d, no = notes.no[d][p];
+        var c = el("button", "cell", locked ? d : no ? "✕" : d);
         c.type = "button";
-        c.setAttribute("aria-label", "Lock " + d + " in position " + (p + 1));
-        if (notes.lock[p] === d) c.classList.add("locked");
-        else if (notes.marks[d] === "red") c.classList.add("out");
+        c.setAttribute("aria-label", d + " in position " + (p + 1) + (locked ? ": locked" : no ? ": not possible" : ""));
+        if (locked) c.classList.add("locked");
+        else if (no) c.classList.add("no");
+        if (!locked && notes.marks[d] === "red") c.classList.add("out");
+        // Cycle: blank -> not here -> locked here -> blank.
         c.onclick = (function (d, p) { return function () {
           if (notes.lock[p] === d) { notes.lock[p] = null; }
-          else {
+          else if (notes.no[d][p]) {
+            notes.no[d][p] = false;
             // A digit can only sit in one position, and a position holds one digit.
             notes.lock = notes.lock.map(function (x) { return x === d ? null : x; });
             notes.lock[p] = d;
             notes.marks[d] = "green";
-          }
-          save(); render();
+          } else { notes.no[d][p] = true; }
+          saveNotes(); renderNotes();
         }; })(d, p);
         grid.appendChild(c);
       }
@@ -221,17 +419,21 @@
       ans.appendChild(el("span", "digit" + (x === null ? " empty" : ""), x === null ? "?" : x));
       if (x === null) full = false;
     });
-    var input = document.querySelector("input[name=guess]");
     var use = document.getElementById("use");
-    use.disabled = !full || !input;
-    use.onclick = function () { input.value = notes.lock.join(""); input.focus(); };
+    use.disabled = !full || !form;
+    use.onclick = function () {
+      var before = snapshot();
+      slots.forEach(function (s, k) { s.d = String(notes.lock[k]); });
+      pushUndo(before); changed();
+    };
   }
 
-  document.getElementById("clear").onclick = function () {
-    notes = { marks: Array(10).fill(""), lock: [null, null, null, null] };
-    save(); render();
-  };
-  render();
+  document.getElementById("clear").onclick = function () { notes = blankNotes(); saveNotes(); renderNotes(); };
+  renderNotes();
+
+  // Keep the newest guess in view.
+  var rowsEl = document.getElementById("rows");
+  rowsEl.scrollTop = rowsEl.scrollHeight;
 })();
 </script>
 </body>
