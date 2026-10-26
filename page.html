@@ -55,11 +55,9 @@
   .tools { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 6px; margin-bottom: 8px; }
   .tools button { font-size: 14px; }
   .submit { width: 100%; }
-  .submit.warn { background: var(--hurt); }
   .msg { min-height: 0; margin: 8px 0 0; font-size: 13px; line-height: 1.45; border-radius: 8px; }
   .msg:not(:empty) { padding: 10px 12px; }
   .msg.err { background: var(--dead-bg); color: var(--dead); }
-  .msg.warn { background: var(--hurt-bg); color: var(--ink); }
   .settings { margin: 14px 0 20px; font-size: 13px; color: var(--muted); }
   .settings summary { cursor: pointer; }
   .settings label { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
@@ -162,7 +160,6 @@
   <details class="settings">
     <summary>Settings</summary>
     <label><input type="checkbox" id="optNoRepeat"> Block guesses with repeated digits</label>
-    <label><input type="checkbox" id="optWarn"> Warn when a guess contradicts earlier results</label>
   </details>
   {{end}}
 
@@ -203,7 +200,7 @@
 <script>
 (function () {
   var game = "{{.Game}}";
-  var history = ({{.Rows}} || []).map(function (r) { return { guess: r.Digits.join(""), dead: r.Dead, injured: r.Injured }; });
+  var history = ({{.Rows}} || []).map(function (r) { return r.Digits.join(""); });
 
   function load(k, fallback) { try { var v = JSON.parse(localStorage.getItem(k)); return v === null ? fallback : v; } catch (e) { return fallback; } }
   function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -221,18 +218,8 @@
     return e;
   }
 
-  // Same rule the server uses: dead = same place, injured = in the number elsewhere.
-  function score(secret, guess) {
-    var d = 0, i = 0;
-    for (var k = 0; k < 4; k++) {
-      if (guess[k] === secret[k]) d++;
-      else if (secret.indexOf(guess[k]) >= 0) i++;
-    }
-    return [d, i];
-  }
-
   /* ---------- guess input ---------- */
-  var settings = load("dai-settings", { noRepeat: true, warn: true });
+  var settings = load("dai-settings", { noRepeat: true });
   var slotsKey = "dai-slots-" + game;
   var saved = load(slotsKey, null);
   // Only locked slots carry over to the next guess.
@@ -240,16 +227,15 @@
     return saved && saved[k] && saved[k].locked ? saved[k] : { d: "", locked: false };
   });
   var undoStack = [];
-  var armed = false; // true after a contradiction warning, so the next press submits
 
   var form = document.getElementById("play");
   if (form) {
     var slotsEl = document.getElementById("slots"), keypad = document.getElementById("keypad");
-    var msg = document.getElementById("msg"), submit = document.getElementById("submit");
-    var optNoRepeat = document.getElementById("optNoRepeat"), optWarn = document.getElementById("optWarn");
-    optNoRepeat.checked = settings.noRepeat; optWarn.checked = settings.warn;
-    optNoRepeat.onchange = optWarn.onchange = function () {
-      settings = { noRepeat: optNoRepeat.checked, warn: optWarn.checked };
+    var msg = document.getElementById("msg");
+    var optNoRepeat = document.getElementById("optNoRepeat");
+    optNoRepeat.checked = settings.noRepeat;
+    optNoRepeat.onchange = function () {
+      settings = { noRepeat: optNoRepeat.checked };
       store("dai-settings", settings); changed();
     };
 
@@ -264,7 +250,7 @@
     var reuse = document.getElementById("reuse");
     reuse.disabled = history.length === 0;
     reuse.onclick = function () {
-      var last = history[history.length - 1].guess;
+      var last = history[history.length - 1];
       var before = snapshot();
       slots.forEach(function (s, k) { if (!s.locked) s.d = last[k]; });
       pushUndo(before); changed();
@@ -282,13 +268,7 @@
     form.onsubmit = function (e) {
       var g = slots.map(function (s) { return s.d; }).join("");
       var problem = check(g);
-      if (problem.block) { e.preventDefault(); show("err", problem.block); return; }
-      if (problem.warn && !armed) {
-        e.preventDefault(); armed = true;
-        show("warn", problem.warn + " Press “Guess anyway” to send it.");
-        submit.textContent = "Guess anyway"; submit.classList.add("warn");
-        return;
-      }
+      if (problem) { e.preventDefault(); show("err", problem); return; }
       document.getElementById("guess").value = g;
       store(slotsKey, slots);
     };
@@ -325,24 +305,15 @@
   }
 
   function check(g) {
-    if (g.length < 4) return { block: "Fill all 4 boxes first." };
-    if (settings.noRepeat && new Set(g).size < 4) return { block: "Each digit can only be used once. Turn this off in Settings." };
-    if (settings.warn) {
-      for (var k = 0; k < history.length; k++) {
-        var h = history[k], s = score(g, h.guess);
-        if (s[0] !== h.dead || s[1] !== h.injured) {
-          return { warn: "This can’t be the answer: guess " + (k + 1) + " (" + h.guess + ") got " + h.dead + " dead, " + h.injured +
-            " injured, but if the answer were " + g + " it would have got " + s[0] + " dead, " + s[1] + " injured." };
-        }
-      }
-    }
-    return {};
+    if (g.length < 4) return "Fill all 4 boxes first.";
+    if (settings.noRepeat && new Set(g).size < 4) return "Each digit can only be used once. Turn this off in Settings.";
+    return "";
   }
 
   function show(kind, text) { msg.className = "msg " + kind; msg.textContent = text; }
 
   function changed() {
-    armed = false; submit.textContent = "Guess"; submit.classList.remove("warn"); show("", "");
+    show("", "");
     store(slotsKey, slots); render();
   }
 
