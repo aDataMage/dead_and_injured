@@ -18,6 +18,7 @@ func newGame() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
 	guess := r.FormValue("guess")
 	if len(guess) == 4 {
 		dead, injured := 0, 0
