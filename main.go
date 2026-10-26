@@ -44,6 +44,7 @@ type match struct {
 	secret  string
 	players []*player
 	winner  int // index into players, -1 until someone cracks it
+	quit    int // index of the player who quit a room, -1 if nobody has
 	created time.Time
 }
 
@@ -52,7 +53,7 @@ var solo = newMatch(1)
 var rooms = map[string]*match{}
 
 func newMatch(size int) *match {
-	m := &match{size: size, created: time.Now()}
+	m := &match{size: size, quit: -1, created: time.Now()}
 	if size == 1 {
 		m.players = []*player{{}}
 	}
@@ -169,6 +170,21 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
 
 // play handles guesses and restarts for a match, then renders it. Caller holds mu.
 func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string) {
+	// Quitting ends the room for both players; the opponent's page picks it up when it polls.
+	if code != "" && r.Method == http.MethodPost && r.FormValue("quit") != "" {
+		if m.quit < 0 {
+			m.quit = me
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if m.quit >= 0 {
+		v := map[string]any{"Room": code, "Scope": code, "Game": m.game, "Rows": m.players[me].rows,
+			"Duel": m.duel, "Joined": m.started(), "Quit": true, "QuitByMe": m.quit == me}
+		w.Header().Set("Content-Type", "text/html")
+		page.Execute(w, v)
+		return
+	}
 	// In a race, a new round can only start once someone has won.
 	if r.FormValue("new") != "" && (m.size == 1 || m.winner >= 0) {
 		m.reset()
@@ -259,7 +275,7 @@ func seat(w http.ResponseWriter, r *http.Request, m *match, code string) int {
 			}
 		}
 	}
-	if len(m.players) >= m.size {
+	if len(m.players) >= m.size || m.quit >= 0 {
 		return -1
 	}
 	p := &player{token: token()}
@@ -279,7 +295,11 @@ func roomHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	me := seat(w, r, m, code)
 	if me < 0 {
-		showMenu(w, "Room "+code+" already has two players.")
+		if m.quit >= 0 {
+			showMenu(w, "The game in room "+code+" has ended.")
+		} else {
+			showMenu(w, "Room "+code+" already has two players.")
+		}
 		return
 	}
 	play(w, r, m, me, code)
@@ -306,6 +326,7 @@ func stateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{
 		"game": m.game, "players": len(m.players), "winner": m.winner, "guesses": total, "ready": ready,
+		"quit": m.quit,
 	})
 }
 

@@ -137,7 +137,11 @@
   <div class="top">
     <h1>Dead &amp; Injured</h1>
     <div>
-      <a class="restart" href="/">Menu</a>
+      {{if and .Room (not .Quit)}}
+      <form method="post" style="margin:0;display:inline" onsubmit="return confirm('Quit this game? It will end for your opponent too.')">
+        <button class="restart" name="quit" value="1">Quit</button>
+      </form>
+      {{else}}<a class="restart" href="/">Menu</a>{{end}}
       {{if not .Room}}{{if .Rows}}{{if not .Over}}<form style="margin:0;display:inline"><button class="restart" name="new" value="1">Restart</button></form>{{end}}{{end}}{{end}}
     </div>
   </div>
@@ -150,7 +154,8 @@
     {{if not .Joined}}· Waiting for your opponent to join. Tell them to pick “Join room” and enter <b>{{.Room}}</b>.
     {{else if not .Waiting}}· Opponent has made <b id="opp">{{.OppGuesses}}</b> guesses.{{end}}
     {{if .MySecret}}<br>Your number: <b>{{.MySecret}}</b>{{end}}</p>
-  {{if .NeedSecret}}
+  {{if .Quit}}
+  {{else if .NeedSecret}}
   <form method="post" class="secret" autocomplete="off">
     <p>Pick a 4-digit number with no repeated digits. Your opponent has to crack it.</p>
     <input name="secret" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required autofocus>
@@ -162,7 +167,13 @@
   {{end}}
   {{end}}
 
-  {{if .Over}}
+  {{if .Quit}}
+  <div class="win lost">
+    <h2>{{if .QuitByMe}}You quit this game{{else}}Your opponent quit{{end}}</h2>
+    <p>This game has ended.</p>
+    <form action="/" style="justify-content:center;margin:0"><button>Back to menu</button></form>
+  </div>
+  {{else if .Over}}
   <div class="win{{if .Lost}} lost{{end}}">
     {{if .Won}}<h2>You got it!</h2>
     <p>{{if .Duel}}You cracked their number <b>{{.Secret}}</b>{{else}}The number was <b>{{.Secret}}</b>, found{{end}} in {{len .Rows}} guesses.</p>
@@ -435,11 +446,11 @@
   renderNotes();
 
   // In a room, watch for the opponent joining, guessing, or winning.
-  {{if .Room}}
-  var seen = "{{.Game}},{{.Joined}},{{.Over}},{{not .Waiting}}";
+  {{if and .Room (not .Quit)}}
+  var seen = "{{.Game}},{{.Joined}},{{.Over}},{{not .Waiting}},{{.Quit}}";
   setInterval(function () {
     fetch(location.pathname + "/state").then(function (r) { return r.json(); }).then(function (s) {
-      if ([s.game, s.players === 2, s.winner >= 0, s.ready === 1].join() !== seen) location.replace(location.pathname);
+      if ([s.game, s.players === 2, s.winner >= 0, s.ready === 1, s.quit >= 0].join() !== seen) location.replace(location.pathname);
       var opp = document.getElementById("opp");
       if (opp) opp.textContent = s.guesses - history.length;
     }).catch(function () {});
