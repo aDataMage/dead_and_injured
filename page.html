@@ -93,6 +93,15 @@
     border: 1px solid var(--line);
   }
   a.restart { display: inline-block; text-decoration: none; }
+  .topbar {
+    flex-basis: 100%; max-width: 820px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
+    font-size: 14px; font-weight: 600; position: sticky; top: 8px; z-index: 1;
+  }
+  .topbar .legend { font-size: 12px; font-weight: 400; color: var(--muted); flex: 1; min-width: 200px; }
+  .topbar .legend .g { color: var(--win); } .topbar .legend .y { color: var(--hurt); }
+  .topbar .digit.green { background: var(--win); border-color: var(--win); color: var(--card); }
+  .topbar .digit.yellow { background: var(--hurt); border-color: var(--hurt); color: var(--card); }
   .secret { margin-bottom: 20px; font-size: 14px; }
   .secret input { font-size: 20px; width: 120px; padding: 6px; }
   .room { font-size: 14px; margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
@@ -133,6 +142,14 @@
 </style>
 </head>
 <body>
+{{if and .Mine (not .Quit)}}
+<div class="topbar">
+  <span>Your number</span>
+  <span class="digits mono" id="mine">{{range .Mine}}<span class="digit {{.Class}}">{{.D}}</span>{{end}}</span>
+  <span class="legend"><b class="g">Green</b>: your opponent has it in the right spot in their notes.
+    <b class="y">Yellow</b>: they've marked it as in your number.</span>
+</div>
+{{end}}
 <main class="card">
   <div class="top">
     <h1>Dead &amp; Injured</h1>
@@ -153,7 +170,7 @@
   <p class="room">{{if .Duel}}Duel{{else}}Race{{end}} · Room <b>{{.Room}}</b>
     {{if not .Joined}}· Waiting for your opponent to join. Tell them to pick “Join room” and enter <b>{{.Room}}</b>.
     {{else if not .Waiting}}· Opponent has made <b id="opp">{{.OppGuesses}}</b> guesses.{{end}}
-    {{if .MySecret}}<br>Your number: <b>{{.MySecret}}</b>{{end}}</p>
+</p>
   {{if .Quit}}
   {{else if .NeedSecret}}
   <form method="post" class="secret" autocomplete="off">
@@ -219,7 +236,7 @@
 
 <aside class="card side">
   <h2>Notes</h2>
-  <p class="sub">Only you see these. They reset when you start a new game.</p>
+  <p class="sub">{{if .Duel}}Your opponent can't see your notes, only which digits of their number you've marked correctly.{{else}}Only you see these.{{end}} They reset when you start a new game.</p>
 
   <h3>Digits</h3>
   <div class="key"><span style="--c:var(--win)">Right place</span><span style="--c:var(--hurt)">In, wrong place</span><span style="--c:var(--dead)">Out</span></div>
@@ -384,7 +401,13 @@
   }
   var notes = load(notesKey, blankNotes());
   if (!notes.no) notes.no = blankNotes().no;
-  function saveNotes() { store(notesKey, notes); }
+  function saveNotes() {
+    store(notesKey, notes);
+    // In a duel, share notes with the server so the opponent's top bar can show what you've worked out.
+    if ({{.Duel}} && !{{.Quit}}) {
+      fetch(location.pathname + "/notes?game={{.Game}}", { method: "POST", body: JSON.stringify(notes) }).catch(function () {});
+    }
+  }
 
   function renderNotes() {
     var marks = document.getElementById("marks"), grid = document.getElementById("grid"), ans = document.getElementById("answer");
@@ -444,18 +467,33 @@
 
   document.getElementById("clear").onclick = function () { notes = blankNotes(); saveNotes(); renderNotes(); };
   renderNotes();
+  saveNotes();
 
   // In a room, watch for the opponent joining, guessing, or winning.
   {{if and .Room (not .Quit)}}
   var seen = "{{.Game}},{{.Joined}},{{.Over}},{{not .Waiting}},{{.Quit}}";
   setInterval(function () {
     fetch(location.pathname + "/state").then(function (r) { return r.json(); }).then(function (s) {
-      if ([s.game, s.players === 2, s.winner >= 0, s.ready === 1, s.quit >= 0].join() !== seen) location.replace(location.pathname);
+      if ([s.game, s.players === 2, s.winner >= 0, s.ready === 1, s.quit >= 0].join() !== seen) {
+        var draft = document.querySelector("input[name=secret]");
+        try { if (draft && draft.value) sessionStorage.setItem("dai-secret-draft", draft.value); } catch (e) {}
+        location.replace(location.pathname);
+        return;
+      }
+      var mine = document.getElementById("mine");
+      if (mine && s.mine) s.mine.forEach(function (c, k) { mine.children[k].className = "digit " + c.Class; });
       var opp = document.getElementById("opp");
       if (opp) opp.textContent = s.guesses - history.length;
     }).catch(function () {});
   }, 1500);
   {{end}}
+
+  // Put back a number the player was typing if the page had to reload.
+  try {
+    var draft = sessionStorage.getItem("dai-secret-draft"), input = document.querySelector("input[name=secret]");
+    sessionStorage.removeItem("dai-secret-draft");
+    if (draft && input) input.value = draft;
+  } catch (e) {}
 
   // Keep the newest guess in view.
   var rowsEl = document.getElementById("rows");
