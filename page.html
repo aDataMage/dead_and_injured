@@ -19,7 +19,8 @@
   body {
     margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    display: flex; justify-content: center; padding: 40px 16px;
+    display: flex; justify-content: center; align-items: flex-start; flex-wrap: wrap;
+    gap: 20px; padding: 40px 16px;
   }
   .card {
     width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--line);
@@ -47,7 +48,12 @@
     width: 36px; height: 40px; display: grid; place-items: center; font-size: 20px; font-weight: 600;
     font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 8px;
   }
-  .tag { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 999px; }
+  .tag { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+  @media (max-width: 480px) {
+    .card { padding: 20px 16px; }
+    .row { gap: 8px; }
+    .digit { width: 32px; }
+  }
   .tag.d { color: var(--dead); background: var(--dead-bg); }
   .tag.i { color: var(--hurt); background: var(--hurt-bg); }
   .win {
@@ -57,13 +63,34 @@
   .win h2 { margin: 0 0 6px; font-size: 22px; }
   .win p { margin: 0 0 14px; color: var(--ink); }
   .empty { color: var(--muted); text-align: center; font-size: 14px; padding: 16px 0; }
-  .new { margin-top: 20px; text-align: center; }
-  .new a { color: var(--muted); font-size: 13px; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .restart {
+    font-size: 13px; padding: 6px 12px; margin-top: 4px; background: transparent; color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .restart:hover { color: var(--ink); border-color: var(--ink); }
+  .side { max-width: 360px; padding: 22px; }
+  .side h2 { margin: 0 0 4px; font-size: 18px; }
+  .side .sub { margin-bottom: 14px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; padding: 0 4px 6px; }
+  td { border-top: 1px solid var(--line); padding: 5px 4px; vertical-align: top; text-align: center; }
+  td.dg {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 16px; font-weight: 700;
+    width: 28px; text-align: left;
+  }
+  tr.unplayed td.dg { color: var(--muted); font-weight: 400; }
+  .o { display: block; white-space: nowrap; font-weight: 600; line-height: 1.6; }
+  .o .d { color: var(--dead); } .o .i { color: var(--hurt); }
+  .none { color: var(--line); }
 </style>
 </head>
 <body>
 <main class="card">
-  <h1>Dead &amp; Injured</h1>
+  <div class="top">
+    <h1>Dead &amp; Injured</h1>
+    {{if .Rows}}{{if not .Won}}<form style="margin:0"><button class="restart" name="new" value="1">Restart</button></form>{{end}}{{end}}
+  </div>
   <p class="sub">Guess the 4 different digits.
     <b class="d">Dead</b> = right digit, right place.
     <b class="i">Injured</b> = right digit, wrong place.</p>
@@ -94,5 +121,19 @@
     {{end}}
   </div>
 </main>
+
+<aside class="card side">
+  <h2>Number history</h2>
+  <p class="sub">Each cell shows the result of every guess that had that digit in that position.</p>
+  <table>
+    <tr><th></th><th>1st</th><th>2nd</th><th>3rd</th><th>4th</th></tr>
+    {{range .Board}}
+    <tr class="{{if not .Played}}unplayed{{end}}">
+      <td class="dg">{{.Digit}}</td>
+      {{range .Cells}}<td>{{range .}}<span class="o"><span class="d">{{.Dead}}D</span> <span class="i">{{.Injured}}I</span></span>{{else}}<span class="none">·</span>{{end}}</td>{{end}}
+    </tr>
+    {{end}}
+  </table>
+</aside>
 </body>
 </html>
