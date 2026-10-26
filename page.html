@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dead & Injured</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --card: #ffffff; --ink: #1f2328; --muted: #6b7280; --line: #e5e1d8;
+    --dead: #c0392b; --dead-bg: #fbe9e7; --hurt: #b7791f; --hurt-bg: #fdf3dc; --win: #1e7a46; --win-bg: #e3f4ea; --accent: #1f2328;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171a; --card: #1e2125; --ink: #ecedee; --muted: #9aa1a9; --line: #2e3238;
+      --dead: #ff7b6b; --dead-bg: #3a1f1c; --hurt: #f2c14e; --hurt-bg: #3a3018; --win: #5fd28f; --win-bg: #173323; --accent: #ecedee;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; justify-content: center; padding: 40px 16px;
+  }
+  .card {
+    width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.06); align-self: flex-start;
+  }
+  h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -0.5px; }
+  .sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .sub b.d { color: var(--dead); } .sub b.i { color: var(--hurt); }
+  form { display: flex; gap: 8px; margin-bottom: 20px; }
+  input {
+    flex: 1; min-width: 0; font-size: 24px; letter-spacing: 12px; text-align: center;
+    font-family: ui-monospace, Menlo, Consolas, monospace; padding: 12px;
+    border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink);
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    font-size: 16px; font-weight: 600; padding: 12px 20px; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--card); cursor: pointer;
+  }
+  .rows { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .n { width: 22px; color: var(--muted); font-size: 13px; text-align: right; }
+  .digits { display: flex; gap: 4px; }
+  .digit {
+    width: 36px; height: 40px; display: grid; place-items: center; font-size: 20px; font-weight: 600;
+    font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .tag { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 999px; }
+  .tag.d { color: var(--dead); background: var(--dead-bg); }
+  .tag.i { color: var(--hurt); background: var(--hurt-bg); }
+  .win {
+    text-align: center; padding: 20px; margin-bottom: 20px; border-radius: 12px;
+    background: var(--win-bg); color: var(--win);
+  }
+  .win h2 { margin: 0 0 6px; font-size: 22px; }
+  .win p { margin: 0 0 14px; color: var(--ink); }
+  .empty { color: var(--muted); text-align: center; font-size: 14px; padding: 16px 0; }
+  .new { margin-top: 20px; text-align: center; }
+  .new a { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Dead &amp; Injured</h1>
+  <p class="sub">Guess the 4 different digits.
+    <b class="d">Dead</b> = right digit, right place.
+    <b class="i">Injured</b> = right digit, wrong place.</p>
+
+  {{if .Won}}
+  <div class="win">
+    <h2>You got it!</h2>
+    <p>The number was <b>{{.Secret}}</b>, found in {{len .Rows}} guesses.</p>
+    <form style="justify-content:center;margin:0"><button name="new" value="1" autofocus>Play again</button></form>
+  </div>
+  {{else}}
+  <form autocomplete="off">
+    <input name="guess" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="····" required autofocus>
+    <button>Guess</button>
+  </form>
+  {{end}}
+
+  <div class="rows">
+    {{range $r := .Rows}}
+    <div class="row">
+      <span class="n">{{$r.N}}</span>
+      <span class="digits">{{range $r.Digits}}<span class="digit">{{.}}</span>{{end}}</span>
+      <span class="tag d">{{$r.Dead}} dead</span>
+      <span class="tag i">{{$r.Injured}} injured</span>
+    </div>
+    {{else}}
+    <div class="empty">No guesses yet.</div>
+    {{end}}
+  </div>
+</main>
+</body>
+</html>

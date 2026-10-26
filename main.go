@@ -1,26 +1,46 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
+	"html/template"
 	"math/rand"
 	"net/http"
 	"strings"
 )
 
+//go:embed page.html
+var pageHTML string
+var page = template.Must(template.New("page").Parse(pageHTML))
+
+type row struct {
+	N             int
+	Digits        []string
+	Dead, Injured int
+}
+
 var secret string
-var history []string
+var rows []row
+var won bool
 
 func newGame() {
 	secret = ""
 	for _, d := range rand.Perm(10)[:4] {
 		secret += fmt.Sprint(d)
 	}
+	rows = nil
+	won = false
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
+	if r.FormValue("new") != "" {
+		newGame()
+	}
 	guess := r.FormValue("guess")
 	if len(guess) == 4 {
+		if won {
+			newGame()
+		}
 		dead, injured := 0, 0
 		for i := 0; i < 4; i++ {
 			if guess[i] == secret[i] {
@@ -29,14 +49,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 				injured++
 			}
 		}
-		history = append(history, fmt.Sprintf("%s: %d dead, %d injured", guess, dead, injured))
-		if dead == 4 {
-			history = append(history, "You win! New game started.")
-			newGame()
-		}
+		rows = append(rows, row{len(rows) + 1, strings.Split(guess, ""), dead, injured})
+		won = dead == 4
 	}
-	fmt.Fprint(w, strings.Join(history, "<br>"))
-	fmt.Fprint(w, `<form><input name="guess" autofocus><button>Guess</button></form>`)
+	w.Header().Set("Content-Type", "text/html")
+	page.Execute(w, map[string]any{"Rows": rows, "Won": won, "Secret": secret})
 }
 
 func main() {
