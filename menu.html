@@ -18,9 +18,15 @@
   <h2>1 player</h2>
   <a class="button" href="/solo">Play solo</a>
 
-  <h2>2 players</h2>
+  <h2>2 players: race</h2>
   <p>The computer picks a number. You both race to crack it on your own devices. First to guess it wins.</p>
-  <form action="/room/new" method="post"><button>Create a room</button></form>
+  <form action="/room/new" method="post"><button>Create a race room</button></form>
+
+  <h2>2 players: duel</h2>
+  <p>You each pick a secret number. Race to crack your opponent's number before they crack yours.</p>
+  <form action="/room/new?mode=duel" method="post"><button>Create a duel room</button></form>
+
+  <h2>Join a room</h2>
   <form action="/join">
     <input name="code" maxlength="4" placeholder="Room code" required autocomplete="off">
     <button>Join room</button>

@@ -93,6 +93,8 @@
     border: 1px solid var(--line);
   }
   a.restart { display: inline-block; text-decoration: none; }
+  .secret { margin-bottom: 20px; font-size: 14px; }
+  .secret input { font-size: 20px; width: 120px; padding: 6px; }
   .room { font-size: 14px; margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
   .win.lost { background: var(--dead-bg); color: var(--dead); }
   .restart:hover { color: var(--ink); border-color: var(--ink); }
@@ -144,17 +146,29 @@
     <b class="i">Injured</b> = right digit, wrong place.</p>
 
   {{if .Room}}
-  <p class="room">Room <b>{{.Room}}</b>
-    {{if .Waiting}}· Waiting for your opponent to join. Tell them to pick “Join room” and enter <b>{{.Room}}</b>.
-    {{else}}· Opponent has made <b id="opp">{{.OppGuesses}}</b> guesses.{{end}}</p>
+  <p class="room">{{if .Duel}}Duel{{else}}Race{{end}} · Room <b>{{.Room}}</b>
+    {{if not .Joined}}· Waiting for your opponent to join. Tell them to pick “Join room” and enter <b>{{.Room}}</b>.
+    {{else if not .Waiting}}· Opponent has made <b id="opp">{{.OppGuesses}}</b> guesses.{{end}}
+    {{if .MySecret}}<br>Your number: <b>{{.MySecret}}</b>{{end}}</p>
+  {{if .NeedSecret}}
+  <form method="post" class="secret" autocomplete="off">
+    <p>Pick a 4-digit number with no repeated digits. Your opponent has to crack it.</p>
+    <input name="secret" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required autofocus>
+    <button>Set my number</button>
+    {{if .SecretError}}<p class="msg err">{{.SecretError}}</p>{{end}}
+  </form>
+  {{else if and .Duel .Joined .Waiting}}
+  <p class="room">Waiting for your opponent to pick their number.</p>
+  {{end}}
   {{end}}
 
   {{if .Over}}
   <div class="win{{if .Lost}} lost{{end}}">
     {{if .Won}}<h2>You got it!</h2>
-    <p>The number was <b>{{.Secret}}</b>, found in {{len .Rows}} guesses.</p>
+    <p>{{if .Duel}}You cracked their number <b>{{.Secret}}</b>{{else}}The number was <b>{{.Secret}}</b>, found{{end}} in {{len .Rows}} guesses.</p>
     {{else}}<h2>Your opponent got it first</h2>
-    <p>They cracked <b>{{.Secret}}</b> in {{.WinnerGuesses}} guesses.</p>{{end}}
+    <p>They cracked {{if .Duel}}your number <b>{{.MySecret}}</b>{{else}}<b>{{.Secret}}</b>{{end}} in {{.WinnerGuesses}} guesses.
+      {{if .Duel}}Their number was <b>{{.Secret}}</b>.{{end}}</p>{{end}}
     <form style="justify-content:center;margin:0"><button name="new" value="1" autofocus>{{if .Room}}Rematch{{else}}Play again{{end}}</button></form>
   </div>
   {{else if .Waiting}}
@@ -422,10 +436,10 @@
 
   // In a room, watch for the opponent joining, guessing, or winning.
   {{if .Room}}
-  var seen = "{{.Game}},{{not .Waiting}},{{.Over}}";
+  var seen = "{{.Game}},{{.Joined}},{{.Over}},{{not .Waiting}}";
   setInterval(function () {
     fetch(location.pathname + "/state").then(function (r) { return r.json(); }).then(function (s) {
-      if ([s.game, s.players === 2, s.winner >= 0].join() !== seen) location.reload();
+      if ([s.game, s.players === 2, s.winner >= 0, s.ready === 1].join() !== seen) location.replace(location.pathname);
       var opp = document.getElementById("opp");
       if (opp) opp.textContent = s.guesses - history.length;
     }).catch(function () {});

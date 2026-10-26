@@ -30,13 +30,16 @@ type row struct {
 }
 
 type player struct {
-	token string
-	rows  []row
+	token  string
+	secret string // the number this player set for their opponent (duel only)
+	rows   []row
 }
 
 // match is one secret number being cracked by one player (solo) or raced by two (a room).
+// In a duel, each player instead sets their own number and cracks the other's.
 type match struct {
 	size    int
+	duel    bool
 	game    int
 	secret  string
 	players []*player
@@ -65,18 +68,41 @@ func (m *match) reset() {
 	}
 	for _, p := range m.players {
 		p.rows = nil
+		p.secret = ""
 	}
 	m.winner = -1
 }
 
 func (m *match) started() bool { return len(m.players) == m.size }
 
+// ready reports whether guessing can begin: everyone has joined and, in a duel, set a number.
+func (m *match) ready() bool {
+	if !m.started() {
+		return false
+	}
+	for _, p := range m.players {
+		if m.duel && p.secret == "" {
+			return false
+		}
+	}
+	return true
+}
+
+// target is the number player me is trying to crack.
+func (m *match) target(me int) string {
+	if m.duel {
+		return m.players[1-me].secret
+	}
+	return m.secret
+}
+
 func (m *match) guess(me int, g string) {
+	secret := m.target(me)
 	dead, injured := 0, 0
 	for i := 0; i < 4; i++ {
-		if g[i] == m.secret[i] {
+		if g[i] == secret[i] {
 			dead++
-		} else if strings.IndexByte(m.secret, g[i]) >= 0 {
+		} else if strings.IndexByte(secret, g[i]) >= 0 {
 			injured++
 		}
 	}
@@ -93,6 +119,19 @@ func isGuess(s string) bool {
 	}
 	for i := 0; i < 4; i++ {
 		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// isSecret checks a number a player sets: 4 digits, none repeated.
+func isSecret(s string) bool {
+	if !isGuess(s) {
+		return false
+	}
+	for i := 0; i < 4; i++ {
+		if strings.IndexByte(s[i+1:], s[i]) >= 0 {
 			return false
 		}
 	}
@@ -136,7 +175,16 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 		return
 	}
-	if g := r.FormValue("guess"); isGuess(g) && m.started() && m.winner < 0 {
+	secretErr := ""
+	if s := r.FormValue("secret"); s != "" && m.duel && m.players[me].secret == "" {
+		if isSecret(s) {
+			m.players[me].secret = s
+			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+			return
+		}
+		secretErr = "Your number needs exactly 4 digits, with no digit repeated."
+	}
+	if g := r.FormValue("guess"); isGuess(g) && m.ready() && m.winner < 0 {
 		m.guess(me, g)
 		// Redirect so refreshing the page doesn't submit the guess again.
 		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
@@ -152,13 +200,20 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 		"Scope":   scope,
 		"Game":    m.game,
 		"Rows":    m.players[me].rows,
-		"Waiting": !m.started(),
+		"Waiting": !m.ready(),
+		"Joined":  m.started(),
+		"Duel":    m.duel,
 		"Over":    m.winner >= 0,
 		"Won":     m.winner == me,
 		"Lost":    m.winner >= 0 && m.winner != me,
 	}
+	if m.duel {
+		v["MySecret"] = m.players[me].secret
+		v["NeedSecret"] = m.players[me].secret == ""
+		v["SecretError"] = secretErr
+	}
 	if m.winner >= 0 {
-		v["Secret"] = m.secret
+		v["Secret"] = m.target(me)
 		v["WinnerGuesses"] = len(m.players[m.winner].rows)
 	}
 	if m.size == 2 && m.started() {
@@ -183,7 +238,9 @@ func newRoomHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	code := roomCode()
-	rooms[code] = newMatch(2)
+	m := newMatch(2)
+	m.duel = r.FormValue("mode") == "duel"
+	rooms[code] = m
 	http.Redirect(w, r, "/room/"+code, http.StatusSeeOther)
 }
 
@@ -242,9 +299,13 @@ func stateHandler(w http.ResponseWriter, r *http.Request) {
 	for _, p := range m.players {
 		total += len(p.rows)
 	}
+	ready := 0
+	if m.ready() {
+		ready = 1
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{
-		"game": m.game, "players": len(m.players), "winner": m.winner, "guesses": total,
+		"game": m.game, "players": len(m.players), "winner": m.winner, "guesses": total, "ready": ready,
 	})
 }
 
