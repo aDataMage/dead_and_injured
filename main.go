@@ -271,6 +271,15 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 		page.Execute(w, v)
 		return
 	}
+	// Coming from the menu: start a fresh solo game if the last one already ended,
+	// otherwise pick up the unfinished one.
+	if r.FormValue("from") == "menu" && m.size == 1 {
+		if m.winner >= 0 || m.timedOut {
+			m.reset()
+		}
+		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+		return
+	}
 	// In a race, a new round can only start once someone has won.
 	if r.FormValue("new") != "" && (m.size == 1 || m.winner >= 0) {
 		m.reset()
