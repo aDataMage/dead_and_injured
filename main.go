@@ -61,11 +61,20 @@ type match struct {
 	winner  int // index into players, -1 until someone cracks it
 	quit    int // index of the player who quit a room, -1 if nobody has
 	created time.Time
+	seen    time.Time // last request, so idle solo games can be cleared out
+
+	// Solo timer. The clock starts on the first guess.
+	limit    time.Duration // 0 means untimed
+	start    time.Time
+	finish   time.Time
+	timedOut bool
 }
 
 var mu sync.Mutex
-var solo = newMatch(1)
+var solos = map[string]*match{} // per browser, keyed by cookie token and mode
 var rooms = map[string]*match{}
+
+const timedLimit = 120 * time.Second
 
 func newMatch(size int) *match {
 	m := &match{size: size, quit: -1, created: time.Now()}
@@ -88,6 +97,30 @@ func (m *match) reset() {
 		p.notes = notes{}
 	}
 	m.winner = -1
+	m.start, m.finish, m.timedOut = time.Time{}, time.Time{}, false
+}
+
+// checkTime ends a timed game once its time is up.
+func (m *match) checkTime() {
+	if m.limit > 0 && !m.start.IsZero() && m.winner < 0 && !m.timedOut && time.Since(m.start) >= m.limit {
+		m.timedOut = true
+		m.finish = m.start.Add(m.limit)
+	}
+}
+
+func (m *match) elapsed() time.Duration {
+	switch {
+	case m.start.IsZero():
+		return 0
+	case !m.finish.IsZero():
+		return m.finish.Sub(m.start)
+	}
+	return time.Since(m.start)
+}
+
+func clock(d time.Duration) string {
+	s := int(d.Seconds())
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }
 
 func (m *match) started() bool { return len(m.players) == m.size }
@@ -154,10 +187,14 @@ func (m *match) guess(me int, g string) {
 			injured++
 		}
 	}
+	if m.start.IsZero() {
+		m.start = time.Now()
+	}
 	p := m.players[me]
 	p.rows = append(p.rows, row{len(p.rows) + 1, strings.Split(g, ""), dead, injured})
 	if dead == 4 && m.winner < 0 {
 		m.winner = me
+		m.finish = time.Now()
 	}
 }
 
@@ -217,6 +254,8 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
 
 // play handles guesses and restarts for a match, then renders it. Caller holds mu.
 func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string) {
+	m.seen = time.Now()
+	m.checkTime()
 	// Quitting ends the room for both players; the opponent's page picks it up when it polls.
 	if code != "" && r.Method == http.MethodPost && r.FormValue("quit") != "" {
 		if m.quit < 0 {
@@ -247,16 +286,17 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 		}
 		secretErr = "Your number needs exactly 4 digits, with no digit repeated."
 	}
-	if g := r.FormValue("guess"); isGuess(g) && m.ready() && m.winner < 0 {
+	if g := r.FormValue("guess"); isGuess(g) && m.ready() && m.winner < 0 && !m.timedOut {
 		m.guess(me, g)
 		// Redirect so refreshing the page doesn't submit the guess again.
 		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 		return
 	}
 
-	scope := "solo"
-	if code != "" {
-		scope = code
+	// The scope keeps browser-side notes from one game separate from another's.
+	scope := code
+	if code == "" {
+		scope = fmt.Sprintf("solo%d-%d", m.limit/time.Second, m.created.Unix())
 	}
 	v := map[string]any{
 		"Room":    code,
@@ -266,10 +306,21 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 		"Waiting": !m.ready(),
 		"Joined":  m.started(),
 		"Duel":    m.duel,
-		"Over":    m.winner >= 0,
+		"Over":    m.winner >= 0 || m.timedOut,
 		"Won":     m.winner == me,
 		"Lost":    m.winner >= 0 && m.winner != me,
 		"Quit":    false,
+	}
+	if m.size == 1 {
+		v["Solo"] = true
+		v["LimitSec"] = int(m.limit / time.Second)
+		v["ElapsedMs"] = m.elapsed().Milliseconds()
+		v["Running"] = !m.start.IsZero() && m.winner < 0 && !m.timedOut
+		v["TimeTaken"] = clock(m.elapsed())
+		v["TimedOut"] = m.timedOut
+		if m.timedOut {
+			v["Secret"] = m.secret
+		}
 	}
 	if m.duel {
 		v["MySecret"] = m.players[me].secret
@@ -288,10 +339,34 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 	page.Execute(w, v)
 }
 
+// soloHandler gives each browser its own solo game, one per mode.
 func soloHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
-	play(w, r, solo, 0, "")
+	tok := ""
+	if c, err := r.Cookie("dai_solo"); err == nil {
+		tok = c.Value
+	} else {
+		tok = token()
+		http.SetCookie(w, &http.Cookie{Name: "dai_solo", Value: tok, Path: "/", HttpOnly: true, MaxAge: 30 * 24 * 60 * 60})
+	}
+	limit := time.Duration(0)
+	if r.URL.Path == "/solo/timed" {
+		limit = timedLimit
+	}
+	key := tok + r.URL.Path
+	m := solos[key]
+	if m == nil {
+		for k, old := range solos {
+			if time.Since(old.seen) > 12*time.Hour {
+				delete(solos, k)
+			}
+		}
+		m = newMatch(1)
+		m.limit = limit
+		solos[key] = m
+	}
+	play(w, r, m, 0, "")
 }
 
 func newRoomHandler(w http.ResponseWriter, r *http.Request) {
@@ -433,6 +508,7 @@ func lanAddrs() []string {
 func main() {
 	http.HandleFunc("/{$}", menuHandler)
 	http.HandleFunc("/solo", soloHandler)
+	http.HandleFunc("/solo/timed", soloHandler)
 	http.HandleFunc("/room/new", newRoomHandler)
 	http.HandleFunc("/join", joinHandler)
 	http.HandleFunc("/room/{code}", roomHandler)

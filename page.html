@@ -105,6 +105,10 @@
   .topbar .digit.yellow { background: var(--hurt); border-color: var(--hurt); color: var(--card); }
   .secret { margin-bottom: 20px; font-size: 14px; }
   .secret input { font-size: 20px; width: 120px; padding: 6px; }
+  .timer { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .clock { font: 700 18px ui-monospace, Menlo, Consolas, monospace; }
+  .clock.low, .clock.out { color: var(--dead); }
+  .timer .note { font-size: 12px; color: var(--muted); }
   .room { font-size: 14px; margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
   .win.lost { background: var(--dead-bg); color: var(--dead); }
   .restart:hover { color: var(--ink); border-color: var(--ink); }
@@ -220,6 +224,11 @@
     <b class="d">Dead</b> = right digit, right place.
     <b class="i">Injured</b> = right digit, wrong place.</p>
 
+  {{if .Solo}}
+  <p class="room timer">{{if .LimitSec}}Timed · {{end}}<span class="clock{{if .TimedOut}} out{{end}}" id="clock"></span>
+    {{if and (not .Running) (not .Over)}}<span class="note">The clock starts on your first guess.</span>{{end}}</p>
+  {{end}}
+
   {{if .Room}}
   <p class="room">{{if .Duel}}Duel{{else}}Race{{end}} · Room <b>{{.Room}}</b>
     {{if not .Joined}}· Waiting for your opponent to join. Tell them to pick “Join room” and enter <b>{{.Room}}</b>.
@@ -246,9 +255,11 @@
     <form action="/" style="justify-content:center;margin:0"><button>Back to menu</button></form>
   </div>
   {{else if .Over}}
-  <div class="win{{if .Lost}} lost{{end}}">
-    {{if .Won}}<h2>You got it!</h2>
-    <p>{{if .Duel}}You cracked their number <b>{{.Secret}}</b>{{else}}The number was <b>{{.Secret}}</b>, found{{end}} in {{len .Rows}} guesses.</p>
+  <div class="win{{if or .Lost .TimedOut}} lost{{end}}">
+    {{if .TimedOut}}<h2>Time's up!</h2>
+    <p>The number was <b>{{.Secret}}</b>. Guesses made: {{len .Rows}}.</p>
+    {{else if .Won}}<h2>You got it!</h2>
+    <p>{{if .Duel}}You cracked their number <b>{{.Secret}}</b>{{else}}The number was <b>{{.Secret}}</b>, found{{end}} in {{len .Rows}} guesses{{if .Solo}} and <b>{{.TimeTaken}}</b>{{end}}.</p>
     {{else}}<h2>Your opponent got it first</h2>
     <p>They cracked {{if .Duel}}your number <b>{{.MySecret}}</b>{{else}}<b>{{.Secret}}</b>{{end}} in {{.WinnerGuesses}} guesses.
       {{if .Duel}}Their number was <b>{{.Secret}}</b>.{{end}}</p>{{end}}
@@ -565,6 +576,28 @@
   document.getElementById("tabHistory").onclick = function () { showTab(false); };
   document.getElementById("tabNotes").onclick = function () { showTab(true); };
   try { if (sessionStorage.getItem("dai-tab") === "notes") showTab(true); } catch (e) {}
+
+  // Solo clock: counts up, or down in the timed mode. The server has the final say on time.
+  {{if .Solo}}
+  (function () {
+    var el = document.getElementById("clock"), limit = {{.LimitSec}} * 1000;
+    var t0 = Date.now() - {{.ElapsedMs}}, running = {{.Running}};
+    function fmt(ms) { var s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + ("0" + s % 60).slice(-2); }
+    function tick() {
+      var ms = running ? Date.now() - t0 : {{.ElapsedMs}};
+      if (limit) {
+        var left = Math.max(0, limit - ms);
+        el.textContent = fmt(Math.ceil(left / 1000) * 1000) + " left";
+        el.classList.toggle("low", left < 20000);
+        if (running && left <= 0) { running = false; location.replace(location.pathname); }
+      } else {
+        el.textContent = fmt(ms);
+      }
+    }
+    tick();
+    if (running) setInterval(tick, 250);
+  })();
+  {{end}}
 
   // Keep the newest guess in view.
   var rowsEl = document.getElementById("rows");
