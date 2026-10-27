@@ -10,6 +10,7 @@ import (
 	mrand "math/rand"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -438,11 +439,18 @@ func main() {
 	http.HandleFunc("/room/{code}/state", stateHandler)
 	http.HandleFunc("POST /room/{code}/notes", notesHandler)
 
-	fmt.Println("Open http://localhost:8080")
-	for _, ip := range lanAddrs() {
-		fmt.Printf("Other devices on your network: http://%s:8080\n", ip)
+	// Hosts like Render pick the port and pass it in PORT; locally we use 8080.
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+		fmt.Println("Open http://localhost:8080")
+		for _, ip := range lanAddrs() {
+			fmt.Printf("Other devices on your network: http://%s:8080\n", ip)
+		}
+	} else {
+		fmt.Println("Listening on port " + port)
 	}
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		fmt.Println(err)
 	}
 }
