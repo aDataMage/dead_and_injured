@@ -2,43 +2,104 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dead & Injured</title>
 <style>
+  /* One meaning per colour, everywhere: green = right place (dead), amber = wrong place (injured), red = not in the number. */
   :root {
-    --bg: #f4f1ea; --card: #ffffff; --ink: #1f2328; --muted: #6b7280; --line: #e5e1d8;
-    --dead: #c0392b; --dead-bg: #fbe9e7; --hurt: #b7791f; --hurt-bg: #fdf3dc; --win: #1e7a46; --win-bg: #e3f4ea; --accent: #1f2328;
+    --bg: #f4f1ea; --card: #ffffff; --ink: #1f2328; --muted: #6b7280; --line: #e5e1d8; --accent: #1f2328;
+    --ok: #1e7a46; --ok-bg: #e3f4ea; --near: #b7791f; --near-bg: #fdf3dc; --no: #c0392b; --no-bg: #fbe9e7;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #15171a; --card: #1e2125; --ink: #ecedee; --muted: #9aa1a9; --line: #2e3238;
-      --dead: #ff7b6b; --dead-bg: #3a1f1c; --hurt: #f2c14e; --hurt-bg: #3a3018; --win: #5fd28f; --win-bg: #173323; --accent: #ecedee;
+      --bg: #15171a; --card: #1e2125; --ink: #ecedee; --muted: #9aa1a9; --line: #2e3238; --accent: #ecedee;
+      --ok: #5fd28f; --ok-bg: #173323; --near: #f2c14e; --near-bg: #3a3018; --no: #ff7b6b; --no-bg: #3a1f1c;
     }
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    display: flex; justify-content: center; align-items: flex-start; flex-wrap: wrap;
-    gap: 20px; padding: 40px 16px;
+    display: flex; justify-content: center; align-items: flex-start; flex-wrap: wrap; gap: 20px; padding: 40px 16px;
   }
+  button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  button:disabled { opacity: .35; cursor: default; }
+  form { margin: 0; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
   .card {
     width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--line);
-    border-radius: 16px; padding: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.06); align-self: flex-start;
+    border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.06);
   }
-  h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -0.5px; }
-  .sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.5; }
-  .sub b.d { color: var(--dead); } .sub b.i { color: var(--hurt); }
-  form { margin: 0; }
-  button {
-    font-size: 16px; font-weight: 600; padding: 12px 20px; border: 0; border-radius: 10px;
-    background: var(--accent); color: var(--card); cursor: pointer;
+
+  /* header */
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h1 { margin: 0; font-size: 26px; letter-spacing: -0.5px; }
+  .actions { display: flex; gap: 6px; flex: none; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 7px 12px;
+    border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); text-decoration: none;
   }
-  button:disabled { opacity: .35; cursor: default; }
-  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  .slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
+  .pill:hover { color: var(--ink); border-color: var(--ink); }
+  .pill svg { width: 15px; height: 15px; }
+  .rules { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .ok-t { color: var(--ok); } .near-t { color: var(--near); } .no-t { color: var(--no); }
+
+  /* clock and settings row */
+  .meta { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; min-height: 32px; }
+  .meta .spacer { flex: 1; }
+  .elapsed { font-size: 13px; color: var(--muted); }
+  .elapsed .clock { font: 600 13px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); }
+  .note { font-size: 12px; color: var(--muted); }
+  .countdown {
+    display: flex; align-items: baseline; gap: 10px; padding: 6px 12px; border-radius: 10px;
+    background: var(--bg); border: 1px solid var(--line);
+  }
+  .countdown .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .countdown .clock { font: 700 22px ui-monospace, Menlo, Consolas, monospace; }
+  .countdown.low { background: var(--no-bg); border-color: var(--no); }
+  .countdown.low .clock, .countdown.low .lbl { color: var(--no); }
+  @media (prefers-reduced-motion: no-preference) {
+    .countdown.low .clock { animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .45; } }
+  }
+
+  /* room and end-of-game boxes */
+  .room { font-size: 14px; margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--bg); line-height: 1.45; }
+  .secret { margin-top: 14px; font-size: 14px; }
+  .secret p { margin: 0 0 8px; }
+  .secret input {
+    font: 700 22px ui-monospace, Menlo, Consolas, monospace; letter-spacing: 6px; width: 130px; padding: 8px;
+    text-align: center; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink);
+  }
+  .btn { font-size: 16px; font-weight: 600; padding: 12px 20px; border: 0; border-radius: 10px; background: var(--accent); color: var(--card); }
+  .win { text-align: center; padding: 18px; margin-top: 14px; border-radius: 12px; background: var(--ok-bg); color: var(--ok); }
+  .win.lost { background: var(--no-bg); color: var(--no); }
+  .win h2 { margin: 0 0 6px; font-size: 22px; }
+  .win p { margin: 0 0 14px; color: var(--ink); }
+
+  /* history */
+  .rows {
+    display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto;
+    margin-top: 14px; padding: 14px 4px 4px 0; border-top: 1px solid var(--line); overscroll-behavior: contain;
+  }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .n { width: 20px; color: var(--muted); font-size: 12px; text-align: right; flex: none; }
+  .digits { display: flex; gap: 4px; }
+  .digit {
+    width: 36px; height: 40px; display: grid; place-items: center; font-size: 20px; font-weight: 600;
+    font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .tag { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+  .tag.d { color: var(--ok); background: var(--ok-bg); }
+  .tag.i { color: var(--near); background: var(--near-bg); }
+  .tag.zero { color: var(--muted); background: var(--bg); font-weight: 500; }
+  .empty { margin: auto 0; padding: 18px 8px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+  /* guess input */
+  #play { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .slot {
-    position: relative; height: 60px; padding: 0; font-size: 30px; font-weight: 700;
+    position: relative; height: 58px; padding: 0; font-size: 28px; font-weight: 700; border-radius: 10px;
     background: var(--bg); color: var(--ink); border: 2px solid var(--line);
   }
   .slot.next { border-color: var(--accent); }
@@ -47,155 +108,162 @@
     content: "locked"; position: absolute; left: 0; right: 0; bottom: 3px;
     font: 600 9px system-ui, sans-serif; letter-spacing: 1px; text-transform: uppercase; opacity: .7;
   }
-  .hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; text-align: center; }
-  .keypad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px; }
-  .keypad button, .tools button {
-    padding: 0; height: 44px; font-size: 20px; background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  .hint { font-size: 12px; color: var(--muted); margin: 6px 0 10px; text-align: center; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .key {
+    position: relative; height: 48px; padding: 0; font-size: 22px; font-weight: 600; border-radius: 10px;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line);
   }
-  .tools { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 6px; margin-bottom: 8px; }
-  .tools button { font-size: 14px; }
-  .submit { width: 100%; }
-  .msg { min-height: 0; margin: 8px 0 0; font-size: 13px; line-height: 1.45; border-radius: 8px; }
+  .key.fn { font-size: 15px; font-weight: 600; color: var(--muted); font-family: system-ui, sans-serif; }
+  /* Keys echo your own digit notes with a small corner mark. */
+  .key[data-mark]::after {
+    position: absolute; top: 4px; right: 7px; font-size: 11px; font-weight: 700; font-family: system-ui, sans-serif;
+  }
+  .key[data-mark="green"]::after { content: "✓"; color: var(--ok); }
+  .key[data-mark="yellow"]::after { content: "↔"; color: var(--near); }
+  .key[data-mark="red"]::after { content: "✕"; color: var(--no); }
+  .key[data-mark="red"] { color: var(--muted); }
+  .buttons { display: flex; gap: 6px; margin-top: 6px; }
+  .buttons button { height: 48px; border-radius: 10px; font-size: 14px; font-weight: 600; }
+  .ghost { background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 0 14px; }
+  .submit { flex: 1; border: 0; background: var(--accent); color: var(--card); font-size: 17px !important; }
+  #openNotes { display: none; }
+  .msg { margin: 8px 0 0; font-size: 13px; line-height: 1.45; border-radius: 8px; }
   .msg:not(:empty) { padding: 10px 12px; }
-  .msg.err { background: var(--dead-bg); color: var(--dead); }
-  .settings { margin: 14px 0 20px; font-size: 13px; color: var(--muted); }
-  .settings summary { cursor: pointer; }
-  .settings label { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-  .rows {
-    display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;
-    padding-right: 4px; border-top: 1px solid var(--line); padding-top: 14px;
-  }
-  .row { display: flex; align-items: center; gap: 12px; }
-  .n { width: 22px; color: var(--muted); font-size: 13px; text-align: right; }
-  .digits { display: flex; gap: 4px; }
-  .digit {
-    width: 36px; height: 40px; display: grid; place-items: center; font-size: 20px; font-weight: 600;
-    font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 8px;
-  }
-  .tag { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
-  @media (max-width: 480px) {
-    .card { padding: 20px 16px; }
-    .row { gap: 8px; }
-    .digit { width: 32px; }
-  }
-  .tag.d { color: var(--dead); background: var(--dead-bg); }
-  .tag.i { color: var(--hurt); background: var(--hurt-bg); }
-  .win {
-    text-align: center; padding: 20px; margin-bottom: 20px; border-radius: 12px;
-    background: var(--win-bg); color: var(--win);
-  }
-  .win h2 { margin: 0 0 6px; font-size: 22px; }
-  .win p { margin: 0 0 14px; color: var(--ink); }
-  .empty { color: var(--muted); text-align: center; font-size: 14px; padding: 16px 0; }
-  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-  .restart {
-    font-size: 13px; padding: 6px 12px; margin-top: 4px; background: transparent; color: var(--muted);
-    border: 1px solid var(--line);
-  }
-  a.restart { display: inline-block; text-decoration: none; font-weight: 600; }
-  button { -webkit-tap-highlight-color: transparent; }
+  .msg.err { background: var(--no-bg); color: var(--no); }
+  .tracker { display: none; }
+
+  /* duel bar */
   .topbar {
     flex-basis: 100%; max-width: 820px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
-    font-size: 14px; font-weight: 600; position: sticky; top: 8px; z-index: 1;
+    font-size: 14px; font-weight: 600; position: sticky; top: 8px; z-index: 2;
   }
   .topbar .legend { font-size: 12px; font-weight: 400; color: var(--muted); flex: 1; min-width: 200px; }
-  .topbar .legend .g { color: var(--win); } .topbar .legend .y { color: var(--hurt); }
-  .topbar .digit.green { background: var(--win); border-color: var(--win); color: var(--card); }
-  .topbar .digit.yellow { background: var(--hurt); border-color: var(--hurt); color: var(--card); }
-  .secret { margin-bottom: 20px; font-size: 14px; }
-  .secret input { font-size: 20px; width: 120px; padding: 6px; }
-  .timer { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .clock { font: 700 18px ui-monospace, Menlo, Consolas, monospace; }
-  .clock.low, .clock.out { color: var(--dead); }
-  .timer .note { font-size: 12px; color: var(--muted); }
-  .room { font-size: 14px; margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
-  .win.lost { background: var(--dead-bg); color: var(--dead); }
-  .restart:hover { color: var(--ink); border-color: var(--ink); }
-  .side { max-width: 360px; padding: 22px; }
-  .side h2 { margin: 0 0 4px; font-size: 18px; }
-  .side h3 { margin: 22px 0 4px; font-size: 14px; }
-  .side .sub { margin-bottom: 12px; font-size: 13px; }
-  .key { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-  .key span::before {
-    content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
-    margin-right: 5px; vertical-align: -1px; background: var(--c);
-  }
-  .marks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-  .side button.m, .side button.cell {
-    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 18px; font-weight: 700;
-    padding: 0; height: 40px; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--bg); color: var(--ink);
-  }
-  .side button.m.green { background: var(--win); border-color: var(--win); color: var(--card); }
-  .side button.m.yellow { background: var(--hurt); border-color: var(--hurt); color: var(--card); }
-  .side button.m.red { background: var(--dead); border-color: var(--dead); color: var(--card); }
-  .grid { display: grid; grid-template-columns: 24px repeat(4, 1fr); gap: 4px; align-items: center; }
-  .grid .h { text-align: center; font-size: 12px; color: var(--muted); }
-  .grid .rl { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }
-  .side button.cell { height: 28px; font-size: 14px; color: transparent; }
-  .side button.cell.no { color: var(--dead); background: var(--dead-bg); border-color: var(--dead-bg); font-size: 13px; }
-  .side button.cell.out { opacity: .35; }
-  .side button.cell.no.out { opacity: .35; }
-  .side button.cell.locked { background: var(--win); border-color: var(--win); color: var(--card); opacity: 1; }
-  .answer { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-  .answer .digit { width: 36px; }
-  .answer .digit.empty { color: var(--muted); }
-  .side button.small { font-size: 13px; padding: 8px 12px; margin-left: auto; }
-  .side button.small:disabled { opacity: .4; cursor: default; }
-  .side .clear { display: block; margin-top: 18px; font-size: 12px; color: var(--muted); background: none; padding: 0; text-decoration: underline; }
-  .tabs { display: none; }
+  .topbar .digit.green { background: var(--ok); border-color: var(--ok); color: var(--card); }
+  .topbar .digit.yellow { background: var(--near); border-color: var(--near); color: var(--card); }
 
-  /* Phones: history or notes fill the screen and scroll, the guess input sits at the bottom. */
+  /* notes */
+  .side { max-width: 360px; padding: 20px; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; }
+  .side h2 { margin: 0; font-size: 18px; }
+  #closeNotes { display: none; }
+  .side .privacy { margin: 4px 0 8px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .sec { border-top: 1px solid var(--line); padding: 10px 0; }
+  .sec summary { font-weight: 600; font-size: 14px; cursor: pointer; padding: 4px 0; list-style: none; display: flex; justify-content: space-between; }
+  .sec summary::-webkit-details-marker { display: none; }
+  .sec summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
+  .sec:not([open]) summary::after { transform: rotate(-90deg); }
+  .how { margin: 6px 0 10px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .legendrow { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; margin: 6px 0 8px; }
+  .legendrow span { font-weight: 600; }
+  .marks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .m, .cell {
+    position: relative; font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; padding: 0;
+    border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  .m { height: 44px; font-size: 18px; }
+  .m.green, .chip.green { background: var(--ok); border-color: var(--ok); color: var(--card); }
+  .m.yellow, .chip.yellow { background: var(--near); border-color: var(--near); color: var(--card); }
+  .m.red, .chip.red { background: var(--no); border-color: var(--no); color: var(--card); }
+  .m.green::after, .chip.green::after { content: "✓"; }
+  .m.yellow::after, .chip.yellow::after { content: "↔"; }
+  .m.red::after, .chip.red::after { content: "✕"; }
+  .m::after, .chip::after { position: absolute; top: 2px; right: 4px; font-size: 10px; font-family: system-ui, sans-serif; }
+  .grid { display: grid; grid-template-columns: 22px repeat(4, 1fr); gap: 4px; align-items: center; }
+  .grid .h { text-align: center; font-size: 11px; color: var(--muted); }
+  .grid .rl { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }
+  .cell { height: 30px; font-size: 14px; color: transparent; }
+  .cell.no { color: var(--no); background: var(--no-bg); border-color: var(--no-bg); }
+  .cell.out { opacity: .35; }
+  .cell.locked { background: var(--ok); border-color: var(--ok); color: var(--card); opacity: 1; }
+  .answer { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .answer .digit { width: 34px; }
+  .answer .digit.empty { color: var(--muted); }
+  .small { font-size: 13px; font-weight: 600; padding: 8px 12px; margin-left: auto; border: 0; border-radius: 8px; background: var(--accent); color: var(--card); }
+  textarea {
+    width: 100%; min-height: 90px; resize: vertical; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink);
+  }
+  .clear { margin-top: 6px; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 0; text-decoration: underline; }
+  .scrim { display: none; }
+
+  /* settings dialog */
+  dialog {
+    border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: min(360px, calc(100% - 32px));
+    background: var(--card); color: var(--ink);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog h2 { margin: 0 0 12px; font-size: 18px; }
+  dialog label { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
+  dialog input { width: 18px; height: 18px; margin: 1px 0 0; flex: none; }
+  dialog small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  dialog .btn { width: 100%; margin-top: 16px; }
+
+  @media (max-width: 480px) {
+    .card { padding: 18px 16px; }
+    .row { gap: 8px; }
+    .digit { width: 32px; }
+  }
+
+  /* Phones: one screen. History fills the middle, the guess input sits at the bottom with your digit
+     notes right above it, and the full notes open as a sheet over the input. */
   @media (max-width: 700px) {
     body {
       flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0; padding: 0;
       height: 100vh; height: 100dvh; overflow: hidden; background: var(--card);
     }
-    main.card { display: contents; }
+    main.card {
+      flex: 1; min-height: 0; display: flex; flex-direction: column; max-width: none;
+      border: 0; border-radius: 0; box-shadow: none; padding: 10px 12px 0;
+    }
     .topbar {
-      order: 0; flex: none; position: static; max-width: none; border-radius: 0; border-width: 0 0 1px;
-      padding: 8px 12px; gap: 6px 10px;
+      flex: none; position: static; max-width: none; border-radius: 0; border-width: 0 0 1px; padding: 8px 12px; gap: 6px 10px;
     }
     .topbar .digit { width: 30px; height: 34px; font-size: 17px; }
     .topbar .legend { min-width: 0; flex-basis: 100%; }
-    .top { order: 1; padding: 10px 12px 0; }
-    h1 { font-size: 21px; }
-    .sub { order: 2; margin: 2px 12px 8px; font-size: 12px; }
-    .room, .secret, .win { order: 3; margin: 0 12px 8px; }
+    h1 { font-size: 20px; }
+    .rules { display: none; }
+    .meta { margin-top: 8px; }
+    .room, .secret, .win { margin-top: 8px; }
     .room { padding: 6px 10px; font-size: 13px; }
     .win { padding: 14px; }
-    .settings { order: 4; margin: 0 12px 6px; font-size: 12px; }
-    .tabs { order: 5; display: flex; border-bottom: 1px solid var(--line); }
-    .tabs button {
-      flex: 1; background: none; color: var(--muted); border-radius: 0; padding: 10px;
-      font-size: 14px; border-bottom: 2px solid transparent;
-    }
-    .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
-    .rows {
-      order: 6; flex: 1; min-height: 0; max-height: none; border-top: 0;
-      padding: 10px 12px; overscroll-behavior: contain;
-    }
-    aside.side {
-      order: 6; flex: 1; min-height: 0; overflow-y: auto; max-width: none; border: 0; border-radius: 0;
-      box-shadow: none; padding: 12px; overscroll-behavior: contain;
-    }
-    aside.side h2 { display: none; }
-    body.show-notes .rows { display: none; }
-    body:not(.show-notes) aside.side { display: none; }
+    .rows { flex: 1; min-height: 0; max-height: none; margin-top: 8px; padding-top: 10px; }
     #play {
-      order: 7; display: grid; grid-template-columns: 1fr 1fr 1fr 1.3fr; gap: 6px;
-      padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom));
-      border-top: 1px solid var(--line); background: var(--card);
+      flex: none; margin: 0 -12px; padding: 8px 12px; padding-bottom: calc(8px + env(safe-area-inset-bottom));
+      background: var(--card);
     }
-    #play .slots, #play .keypad, #play .msg { grid-column: 1 / -1; margin: 0; }
     #play .hint { display: none; }
-    .slot { height: 52px; font-size: 26px; }
-    .keypad { grid-template-columns: repeat(10, 1fr); gap: 4px; }
-    .keypad button { height: 44px; font-size: 18px; }
-    .tools { display: contents; }
-    .tools button { height: 44px; font-size: 13px; }
-    .submit { height: 44px; padding: 0; }
+    .tracker { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin-bottom: 8px; }
+    .chip {
+      position: relative; height: 34px; padding: 0; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--bg); color: var(--ink); font: 700 15px ui-monospace, Menlo, Consolas, monospace;
+    }
+    .chip::after { top: 1px; right: 2px; font-size: 8px; }
+    .slots { margin-bottom: 8px; }
+    .slot { height: 50px; font-size: 26px; }
+    .key { height: 46px; }
+    #openNotes { display: block; }
+
+    aside.side {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; max-width: none; max-height: 85vh; max-height: 85dvh;
+      overflow-y: auto; border-radius: 16px 16px 0 0; border-width: 1px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+      transform: translateY(105%); transition: transform .2s ease; overscroll-behavior: contain;
+    }
+    body.notes-open aside.side { transform: none; }
+    #closeNotes { display: inline-flex; }
+    .scrim { position: fixed; inset: 0; z-index: 9; background: rgba(0,0,0,.4); }
+    body.notes-open .scrim { display: block; }
+  }
+  /* Very narrow phones: keep symbol, colour and count; drop the words so nothing gets cut off. */
+  @media (max-width: 379px) {
+    .tag .w { display: none; }
+    .tag { padding: 4px 9px; }
+  }
+  @media (max-width: 700px) and (max-height: 700px) {
+    .key { height: 40px; }
+    .slot { height: 44px; }
+    .chip { height: 30px; }
   }
 </style>
 </head>
@@ -204,43 +272,55 @@
 <div class="topbar">
   <span>Your number</span>
   <span class="digits mono" id="mine">{{range .Mine}}<span class="digit {{.Class}}">{{.D}}</span>{{end}}</span>
-  <span class="legend"><b class="g">Green</b>: your opponent has it in the right spot in their notes.
-    <b class="y">Yellow</b>: they've marked it as in your number.</span>
+  <span class="legend"><b class="ok-t">✓ Green</b>: your opponent has it in the right spot in their notes.
+    <b class="near-t">↔ Amber</b>: they've marked it as in your number.</span>
 </div>
 {{end}}
+
 <main class="card">
   <div class="top">
     <h1>Dead &amp; Injured</h1>
-    <div>
+    <div class="actions">
+      {{if not .Room}}{{if .Rows}}{{if not .Over}}<form><button class="pill" name="new" value="1">Restart</button></form>{{end}}{{end}}{{end}}
       {{if and .Room (not .Quit)}}
-      <form method="post" style="margin:0;display:inline" onsubmit="return confirm('Quit this game? It will end for your opponent too.')">
-        <button class="restart" name="quit" value="1">Quit</button>
+      <form method="post" onsubmit="return confirm('Quit this game? It will end for your opponent too.')">
+        <button class="pill" name="quit" value="1">Quit</button>
       </form>
-      {{else}}<a class="restart" href="/">Menu</a>{{end}}
-      {{if not .Room}}{{if .Rows}}{{if not .Over}}<form style="margin:0;display:inline"><button class="restart" name="new" value="1">Restart</button></form>{{end}}{{end}}{{end}}
+      {{else}}<a class="pill" href="/">Menu</a>{{end}}
     </div>
   </div>
-  <p class="sub">Guess the 4 different digits.
-    <b class="d">Dead</b> = right digit, right place.
-    <b class="i">Injured</b> = right digit, wrong place.</p>
+  <p class="rules">Guess the 4 different digits.
+    <b class="ok-t">✓ Dead</b> = right digit, right place.
+    <b class="near-t">↔ Injured</b> = right digit, wrong place.</p>
 
-  {{if .Solo}}
-  <p class="room timer">{{if .LimitSec}}Timed · {{end}}<span class="clock{{if .TimedOut}} out{{end}}" id="clock"></span>
-    {{if and (not .Running) (not .Over)}}<span class="note">The clock starts on your first guess.</span>{{end}}</p>
+  {{if or .Solo (not (or .Over .Waiting .Quit))}}
+  <div class="meta">
+    {{if .Solo}}
+      {{if .LimitSec}}<div class="countdown" id="countdown"><span class="lbl">Time left</span><span class="clock" id="clock"></span></div>
+      {{else}}<span class="elapsed">Time <span class="clock" id="clock"></span></span>{{end}}
+      {{if and (not .Running) (not .Over)}}<span class="note">Starts on your first guess</span>{{end}}
+    {{end}}
+    <span class="spacer"></span>
+    {{if not (or .Over .Waiting .Quit)}}
+    <button type="button" class="pill" id="openSettings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Settings
+    </button>
+    {{end}}
+  </div>
   {{end}}
 
   {{if .Room}}
   <p class="room">{{if .Duel}}Duel{{else}}Race{{end}} · Room <b>{{.Room}}</b>
     {{if not .Joined}}· Waiting for your opponent to join. Tell them to pick “Join room” and enter <b>{{.Room}}</b>.
-    {{else if not .Waiting}}· Opponent has made <b id="opp">{{.OppGuesses}}</b> guesses.{{end}}
-</p>
+    {{else if not .Waiting}}· Opponent has made <b id="opp">{{.OppGuesses}}</b> guesses.{{end}}</p>
   {{if .Quit}}
   {{else if .NeedSecret}}
   <form method="post" class="secret" autocomplete="off">
     <p>Pick a 4-digit number with no repeated digits. Your opponent has to crack it.</p>
     <input name="secret" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required autofocus
       oninput="this.value = this.value.replace(/[^0-9]/g, '')">
-    <button>Set my number</button>
+    <button class="btn">Set my number</button>
     {{if .SecretError}}<p class="msg err">{{.SecretError}}</p>{{end}}
   </form>
   {{else if and .Duel .Joined .Waiting}}
@@ -252,7 +332,7 @@
   <div class="win lost">
     <h2>{{if .QuitByMe}}You quit this game{{else}}Your opponent quit{{end}}</h2>
     <p>This game has ended.</p>
-    <form action="/" style="justify-content:center;margin:0"><button>Back to menu</button></form>
+    <form action="/"><button class="btn">Back to menu</button></form>
   </div>
   {{else if .Over}}
   <div class="win{{if or .Lost .TimedOut}} lost{{end}}">
@@ -263,67 +343,86 @@
     {{else}}<h2>Your opponent got it first</h2>
     <p>They cracked {{if .Duel}}your number <b>{{.MySecret}}</b>{{else}}<b>{{.Secret}}</b>{{end}} in {{.WinnerGuesses}} guesses.
       {{if .Duel}}Their number was <b>{{.Secret}}</b>.{{end}}</p>{{end}}
-    <form style="justify-content:center;margin:0"><button name="new" value="1" autofocus>{{if .Room}}Rematch{{else}}Play again{{end}}</button></form>
+    <form><button class="btn" name="new" value="1" autofocus>{{if .Room}}Rematch{{else}}Play again{{end}}</button></form>
   </div>
-  {{else if .Waiting}}
-  {{else}}
-  <form id="play" autocomplete="off">
-    <input type="hidden" name="guess" id="guess">
-    <div class="slots mono" id="slots"></div>
-    <p class="hint">Tap a filled box to lock it. Locked digits stay for your next guess.</p>
-    <div class="keypad mono" id="keypad"></div>
-    <div class="tools">
-      <button type="button" id="undo" title="Backspace">⌫ Undo</button>
-      <button type="button" id="clearSlots" title="Esc">Clear</button>
-      <button type="button" id="reuse">↺ Last guess</button>
-    </div>
-    <button class="submit" id="submit">Guess</button>
-    <p class="msg" id="msg"></p>
-  </form>
-  <details class="settings">
-    <summary>Settings</summary>
-    <label><input type="checkbox" id="optNoRepeat"> Block guesses with repeated digits</label>
-  </details>
   {{end}}
-
-  <div class="tabs">
-    <button type="button" id="tabHistory" class="on">History</button>
-    <button type="button" id="tabNotes">Notes</button>
-  </div>
 
   <div class="rows" id="rows">
     {{range $r := .Rows}}
     <div class="row">
       <span class="n">{{$r.N}}</span>
       <span class="digits">{{range $r.Digits}}<span class="digit">{{.}}</span>{{end}}</span>
-      <span class="tag d">{{$r.Dead}} dead</span>
-      <span class="tag i">{{$r.Injured}} injured</span>
+      <span class="tag d{{if not $r.Dead}} zero{{end}}" title="{{$r.Dead}} dead">✓ {{$r.Dead}}<span class="w"> dead</span></span>
+      <span class="tag i{{if not $r.Injured}} zero{{end}}" title="{{$r.Injured}} injured">↔ {{$r.Injured}}<span class="w"> injured</span></span>
     </div>
     {{else}}
-    <div class="empty">No guesses yet.</div>
+    <div class="empty">
+      Your guesses and their scores will appear here.<br>
+      <b class="ok-t">✓ Dead</b>: right digit, right place.<br>
+      <b class="near-t">↔ Injured</b>: right digit, wrong place.
+    </div>
     {{end}}
   </div>
+
+  {{if not (or .Over .Waiting .Quit)}}
+  <form id="play" autocomplete="off">
+    <input type="hidden" name="guess" id="guess">
+    <div class="tracker" id="tracker" aria-label="Your digit notes"></div>
+    <div class="slots mono" id="slots"></div>
+    <p class="hint">Tap a filled box to lock it. Locked digits stay for your next guess.</p>
+    <div class="keypad mono" id="keypad"></div>
+    <div class="buttons">
+      <button type="button" class="ghost" id="reuse">↺ Last guess</button>
+      <button type="button" class="ghost" id="openNotes">Notes</button>
+      <button class="submit" id="submit">Guess</button>
+    </div>
+    <p class="msg" id="msg"></p>
+  </form>
+  {{end}}
 </main>
 
-<aside class="card side">
-  <h2>Notes</h2>
-  <p class="sub">{{if .Duel}}Your opponent can't see your notes, only which digits of their number you've marked correctly.{{else}}Only you see these.{{end}} They reset when you start a new game.</p>
-
-  <h3>Digits</h3>
-  <div class="key"><span style="--c:var(--win)">Right place</span><span style="--c:var(--hurt)">In, wrong place</span><span style="--c:var(--dead)">Out</span></div>
-  <p class="sub">Click a digit to cycle: green, yellow, red, clear.</p>
-  <div class="marks" id="marks"></div>
-
-  <h3>Positions</h3>
-  <p class="sub">Click a square to cycle: <b style="color:var(--dead)">✕</b> not here, then <b style="color:var(--win)">locked</b> here, then clear.</p>
-  <div class="grid" id="grid"></div>
-  <div class="answer">
-    <span class="digits" id="answer"></span>
-    <button class="small" id="use" type="button">Use as guess</button>
+<div class="scrim" id="scrim"></div>
+<aside class="card side" id="notes" aria-label="Notes">
+  <div class="sheet-head">
+    <h2>Notes</h2>
+    <button type="button" class="pill" id="closeNotes">Done</button>
   </div>
+  <p class="privacy">{{if .Duel}}Your opponent can't see your notes, only which digits of their number you've marked correctly.{{else}}Only you see these.{{end}} They reset each new game.</p>
 
-  <button class="clear" id="clear" type="button">Clear notes</button>
+  <details class="sec" open>
+    <summary>Digits</summary>
+    <div class="legendrow"><span class="ok-t">✓ Right place</span><span class="near-t">↔ Wrong place</span><span class="no-t">✕ Not in number</span></div>
+    <p class="how">Tap a digit to mark what you know about it. Tap again to change it.</p>
+    <div class="marks" id="marks"></div>
+  </details>
+
+  <details class="sec" open>
+    <summary>Positions</summary>
+    <p class="how">Mark where a digit <b class="no-t">✕ can't be</b>, or tap twice to <b class="ok-t">confirm</b> it there. A third tap clears it.</p>
+    <div class="grid" id="grid"></div>
+    <div class="answer">
+      <span class="digits" id="answer"></span>
+      <button class="small" id="use" type="button">Use as guess</button>
+    </div>
+  </details>
+
+  <details class="sec">
+    <summary>Scratchpad</summary>
+    <p class="how">Free-form notes for your reasoning.</p>
+    <textarea id="scratch" placeholder="e.g. 4 is in, not 1st or 3rd"></textarea>
+  </details>
+
+  <button class="clear" id="clear" type="button">Clear all notes</button>
 </aside>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2>Settings</h2>
+    <label><input type="checkbox" id="optNoRepeat">
+      <span>Block guesses with repeated digits<small>The secret never repeats a digit, so repeats can only tell you less.</small></span></label>
+    <button class="btn" value="close">Done</button>
+  </form>
+</dialog>
 
 <script>
 (function () {
@@ -349,6 +448,17 @@
     return e;
   }
 
+  /* ---------- notes state (used by the keypad too) ---------- */
+  var notesKey = "dai-notes-" + game;
+  var cycle = ["", "green", "yellow", "red"];
+  function blankNotes() {
+    return { marks: Array(10).fill(""), lock: [null, null, null, null], text: "",
+      no: Array.from({ length: 10 }, function () { return [false, false, false, false]; }) };
+  }
+  var notes = load(notesKey, blankNotes());
+  if (!notes.no) notes.no = blankNotes().no;
+  if (typeof notes.text !== "string") notes.text = "";
+
   /* ---------- guess input ---------- */
   var settings = load("dai-settings", { noRepeat: true });
   var slotsKey = "dai-slots-" + game;
@@ -357,44 +467,29 @@
   var slots = [0, 1, 2, 3].map(function (k) {
     return saved && saved[k] && saved[k].locked ? saved[k] : { d: "", locked: false };
   });
-  var undoStack = [];
 
   var form = document.getElementById("play");
+  var slotsEl, keypad, msg;
   if (form) {
-    var slotsEl = document.getElementById("slots"), keypad = document.getElementById("keypad");
-    var msg = document.getElementById("msg");
-    var optNoRepeat = document.getElementById("optNoRepeat");
-    optNoRepeat.checked = settings.noRepeat;
-    optNoRepeat.onchange = function () {
-      settings = { noRepeat: optNoRepeat.checked };
-      store("dai-settings", settings); changed();
-    };
+    slotsEl = document.getElementById("slots"); keypad = document.getElementById("keypad"); msg = document.getElementById("msg");
 
-    for (var k = 1; k <= 10; k++) {
-      var d = String(k % 10), b = el("button", "", d);
-      b.type = "button"; b.dataset.d = d;
-      b.onclick = function () { type(this.dataset.d); };
+    // Phone-style keypad: 1-9, then delete, 0, clear.
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "del", "0", "clear"].forEach(function (k) {
+      var b;
+      if (k === "del") { b = el("button", "key fn", "⌫"); b.setAttribute("aria-label", "Delete last digit"); b.onclick = backspace; }
+      else if (k === "clear") { b = el("button", "key fn", "Clear"); b.onclick = clearSlots; }
+      else { b = el("button", "key", k); b.dataset.d = k; b.onclick = function () { type(this.dataset.d); }; }
+      b.type = "button";
       keypad.appendChild(b);
-    }
-    document.getElementById("undo").onclick = undo;
-    document.getElementById("clearSlots").onclick = clearSlots;
+    });
+
     var reuse = document.getElementById("reuse");
     reuse.disabled = history.length === 0;
     reuse.onclick = function () {
       var last = history[history.length - 1];
-      var before = snapshot();
       slots.forEach(function (s, k) { if (!s.locked) s.d = last[k]; });
-      pushUndo(before); changed();
+      changed();
     };
-
-    document.addEventListener("keydown", function (e) {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (/^[0-9]$/.test(e.key)) { type(e.key); e.preventDefault(); }
-      else if (e.key === "Backspace") { undo(); e.preventDefault(); }
-      else if (e.key === "Escape") { clearSlots(); }
-      // Enter always submits, even if a keypad or tool button still has focus.
-      else if (e.key === "Enter" && e.target.tagName !== "SUMMARY") { form.requestSubmit(); e.preventDefault(); }
-    });
 
     form.onsubmit = function (e) {
       var g = slots.map(function (s) { return s.d; }).join("");
@@ -406,38 +501,50 @@
     render();
   }
 
-  function snapshot() { return JSON.stringify(slots); }
-  function pushUndo(before) { if (before !== snapshot()) undoStack.push(before); }
+  var dlg = document.getElementById("settings");
+  var optNoRepeat = document.getElementById("optNoRepeat");
+  optNoRepeat.checked = settings.noRepeat;
+  optNoRepeat.onchange = function () {
+    settings = { noRepeat: optNoRepeat.checked };
+    store("dai-settings", settings);
+    if (form) changed();
+  };
+  var openSettings = document.getElementById("openSettings");
+  if (openSettings) openSettings.onclick = function () { dlg.showModal(); };
+
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || dlg.open) return;
+    if (e.key === "Escape" && document.body.classList.contains("notes-open")) { setNotesOpen(false); return; }
+    if (!form || e.target.tagName === "TEXTAREA") return;
+    if (/^[0-9]$/.test(e.key)) { type(e.key); e.preventDefault(); }
+    else if (e.key === "Backspace") { backspace(); e.preventDefault(); }
+    else if (e.key === "Escape") { clearSlots(); }
+    // Enter always submits, even if a keypad or tool button still has focus.
+    else if (e.key === "Enter" && e.target.tagName !== "SUMMARY") { form.requestSubmit(); e.preventDefault(); }
+  });
 
   function type(d) {
     var k = slots.findIndex(function (s) { return !s.locked && s.d === ""; });
     if (k < 0) return;
-    var before = snapshot();
-    slots[k].d = d; pushUndo(before); changed();
+    slots[k].d = d; changed();
   }
-  function undo() {
-    if (undoStack.length) { slots = JSON.parse(undoStack.pop()); }
-    else {
-      // Nothing to undo yet: remove the last unlocked digit instead.
-      for (var k = 3; k >= 0; k--) if (!slots[k].locked && slots[k].d) { slots[k].d = ""; break; }
-    }
+  function backspace() {
+    for (var k = 3; k >= 0; k--) if (!slots[k].locked && slots[k].d) { slots[k].d = ""; break; }
     changed();
   }
   function clearSlots() {
-    var before = snapshot();
     slots.forEach(function (s) { if (!s.locked) s.d = ""; });
-    pushUndo(before); changed();
+    changed();
   }
   function toggleLock(k) {
     if (!slots[k].d && !slots[k].locked) return;
-    var before = snapshot();
     slots[k].locked = !slots[k].locked;
-    pushUndo(before); changed();
+    changed();
   }
 
   function check(g) {
     if (g.length < 4) return "Fill all 4 boxes first.";
-    if (settings.noRepeat && new Set(g).size < 4) return "Each digit can only be used once. Turn this off in Settings.";
+    if (settings.noRepeat && new Set(g).size < 4) return "Each digit can only be used once. You can change this in Settings.";
     return "";
   }
 
@@ -449,6 +556,7 @@
   }
 
   function render() {
+    if (!form) return;
     slotsEl.innerHTML = "";
     var next = slots.findIndex(function (s) { return !s.locked && s.d === ""; });
     slots.forEach(function (s, k) {
@@ -459,39 +567,42 @@
       slotsEl.appendChild(b);
     });
     var used = slots.map(function (s) { return s.d; });
-    keypad.querySelectorAll("button").forEach(function (b) {
-      b.disabled = next < 0 || (settings.noRepeat && used.indexOf(b.dataset.d) >= 0);
+    keypad.querySelectorAll(".key[data-d]").forEach(function (b) {
+      var d = b.dataset.d, mark = notes.marks[+d];
+      b.disabled = next < 0 || (settings.noRepeat && used.indexOf(d) >= 0);
+      if (mark) b.dataset.mark = mark; else delete b.dataset.mark;
     });
   }
 
-  /* ---------- notes ---------- */
-  var notesKey = "dai-notes-" + game;
-  var cycle = ["", "green", "yellow", "red"];
-  function blankNotes() {
-    return { marks: Array(10).fill(""), lock: [null, null, null, null], no: Array.from({ length: 10 }, function () { return [false, false, false, false]; }) };
-  }
-  var notes = load(notesKey, blankNotes());
-  if (!notes.no) notes.no = blankNotes().no;
+  /* ---------- notes panel ---------- */
   function saveNotes() {
     store(notesKey, notes);
-    // In a duel, share notes with the server so the opponent's top bar can show what you've worked out.
+    // In a duel, share digit marks and locks (not the scratchpad) so the opponent's bar can show your progress.
     if ({{.Duel}} && !{{.Quit}}) {
-      fetch(location.pathname + "/notes?game={{.Game}}", { method: "POST", body: JSON.stringify(notes) }).catch(function () {});
+      fetch(location.pathname + "/notes?game={{.Game}}", { method: "POST", body: JSON.stringify({ marks: notes.marks, lock: notes.lock }) }).catch(function () {});
     }
+  }
+
+  function markButton(cls, d) {
+    var b = el("button", cls + " " + notes.marks[d], d);
+    b.type = "button";
+    b.setAttribute("aria-label", "Digit " + d + ({ green: ": right place", yellow: ": wrong place", red: ": not in number" }[notes.marks[d]] || ": unknown"));
+    b.onclick = function () {
+      notes.marks[d] = cycle[(cycle.indexOf(notes.marks[d]) + 1) % cycle.length];
+      saveNotes(); renderNotes();
+    };
+    return b;
   }
 
   function renderNotes() {
     var marks = document.getElementById("marks"), grid = document.getElementById("grid"), ans = document.getElementById("answer");
+    var tracker = document.getElementById("tracker");
     marks.innerHTML = ""; grid.innerHTML = ""; ans.innerHTML = "";
+    if (tracker) tracker.innerHTML = "";
 
     for (var d = 0; d < 10; d++) {
-      var b = el("button", "m " + notes.marks[d], d);
-      b.type = "button";
-      b.onclick = (function (d) { return function () {
-        notes.marks[d] = cycle[(cycle.indexOf(notes.marks[d]) + 1) % cycle.length];
-        saveNotes(); renderNotes();
-      }; })(d);
-      marks.appendChild(b);
+      marks.appendChild(markButton("m", d));
+      if (tracker) tracker.appendChild(markButton("chip", d));
     }
 
     grid.appendChild(el("span"));
@@ -502,11 +613,11 @@
         var locked = notes.lock[p] === d, no = notes.no[d][p];
         var c = el("button", "cell", locked ? d : no ? "✕" : d);
         c.type = "button";
-        c.setAttribute("aria-label", d + " in position " + (p + 1) + (locked ? ": locked" : no ? ": not possible" : ""));
+        c.setAttribute("aria-label", d + " in position " + (p + 1) + (locked ? ": confirmed" : no ? ": can't be here" : ": unknown"));
         if (locked) c.classList.add("locked");
         else if (no) c.classList.add("no");
         if (!locked && notes.marks[d] === "red") c.classList.add("out");
-        // Cycle: blank -> not here -> locked here -> blank.
+        // Cycle: unknown -> can't be here -> confirmed here -> unknown.
         c.onclick = (function (d, p) { return function () {
           if (notes.lock[p] === d) { notes.lock[p] = null; }
           else if (notes.no[d][p]) {
@@ -530,15 +641,29 @@
     var use = document.getElementById("use");
     use.disabled = !full || !form;
     use.onclick = function () {
-      var before = snapshot();
       slots.forEach(function (s, k) { s.d = String(notes.lock[k]); });
-      pushUndo(before); changed();
+      changed(); setNotesOpen(false);
     };
+    render();
   }
 
-  document.getElementById("clear").onclick = function () { notes = blankNotes(); saveNotes(); renderNotes(); };
+  var scratch = document.getElementById("scratch");
+  scratch.value = notes.text;
+  scratch.oninput = function () { notes.text = scratch.value; store(notesKey, notes); };
+
+  document.getElementById("clear").onclick = function () {
+    if (!confirm("Clear all your notes for this game?")) return;
+    notes = blankNotes(); scratch.value = ""; saveNotes(); renderNotes();
+  };
   renderNotes();
   saveNotes();
+
+  // Phone notes sheet.
+  function setNotesOpen(open) { document.body.classList.toggle("notes-open", open); }
+  var openNotes = document.getElementById("openNotes");
+  if (openNotes) openNotes.onclick = function () { setNotesOpen(true); };
+  document.getElementById("closeNotes").onclick = function () { setNotesOpen(false); };
+  document.getElementById("scrim").onclick = function () { setNotesOpen(false); };
 
   // In a room, watch for the opponent joining, guessing, or winning.
   {{if and .Room (not .Quit)}}
@@ -566,32 +691,21 @@
     if (draft && input) input.value = draft;
   } catch (e) {}
 
-  // Phone tabs: show either the guess history or the notes above the input.
-  function showTab(notesTab) {
-    document.body.classList.toggle("show-notes", notesTab);
-    document.getElementById("tabNotes").classList.toggle("on", notesTab);
-    document.getElementById("tabHistory").classList.toggle("on", !notesTab);
-    try { sessionStorage.setItem("dai-tab", notesTab ? "notes" : "history"); } catch (e) {}
-  }
-  document.getElementById("tabHistory").onclick = function () { showTab(false); };
-  document.getElementById("tabNotes").onclick = function () { showTab(true); };
-  try { if (sessionStorage.getItem("dai-tab") === "notes") showTab(true); } catch (e) {}
-
-  // Solo clock: counts up, or down in the timed mode. The server has the final say on time.
+  // Solo clock: counts up in classic, down in timed. The server has the final say on time.
   {{if .Solo}}
   (function () {
-    var el = document.getElementById("clock"), limit = {{.LimitSec}} * 1000;
+    var clock = document.getElementById("clock"), box = document.getElementById("countdown"), limit = {{.LimitSec}} * 1000;
     var t0 = Date.now() - {{.ElapsedMs}}, running = {{.Running}};
     function fmt(ms) { var s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + ("0" + s % 60).slice(-2); }
     function tick() {
       var ms = running ? Date.now() - t0 : {{.ElapsedMs}};
       if (limit) {
         var left = Math.max(0, limit - ms);
-        el.textContent = fmt(Math.ceil(left / 1000) * 1000) + " left";
-        el.classList.toggle("low", left < 20000);
+        clock.textContent = fmt(Math.ceil(left / 1000) * 1000);
+        box.classList.toggle("low", left < 20000);
         if (running && left <= 0) { running = false; location.replace(location.pathname); }
       } else {
-        el.textContent = fmt(ms);
+        clock.textContent = fmt(ms);
       }
     }
     tick();

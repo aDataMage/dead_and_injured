@@ -30,7 +30,7 @@
     width: 44px; height: 50px; display: grid; place-items: center; font-size: 24px; font-weight: 700;
     border-radius: 10px; border: 1px solid var(--line); background: var(--card);
   }
-  .tile.d { background: var(--dead); border-color: var(--dead); color: var(--card); }
+  .tile.d { background: var(--win); border-color: var(--win); color: var(--card); }
   .tile.i { background: var(--hurt); border-color: var(--hurt); color: var(--card); }
   h1 { margin: 0; font-size: 32px; letter-spacing: -0.5px; }
   .tagline { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
@@ -81,11 +81,11 @@
   .how { padding: 16px; }
   .how h2 { margin: 0 0 10px; }
   .how p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
-  .how b.d { color: var(--dead); } .how b.i { color: var(--hurt); }
+  .how b.d { color: var(--win); } .how b.i { color: var(--hurt); }
   .example { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; font-size: 13px; }
   .example .digits { display: flex; gap: 4px; }
   .example .tile { width: 32px; height: 36px; font-size: 17px; border-radius: 8px; }
-  .example .tile.d { background: var(--dead-bg); border-color: var(--dead-bg); color: var(--dead); }
+  .example .tile.d { background: var(--win-bg); border-color: var(--win-bg); color: var(--win); }
   .example .tile.i { background: var(--hurt-bg); border-color: var(--hurt-bg); color: var(--hurt); }
   .example .label { color: var(--muted); }
 
@@ -147,15 +147,15 @@
 
   <section class="card how">
     <h2>How to play</h2>
-    <p>Guess the 4 different digits. <b class="d">Dead</b> means right digit, right place.
-      <b class="i">Injured</b> means right digit, wrong place.</p>
+    <p>Guess the 4 different digits. <b class="d">✓ Dead</b> means right digit, right place.
+      <b class="i">↔ Injured</b> means right digit, wrong place.</p>
     <div class="example mono">
       <span class="label">Secret</span>
       <span class="digits"><span class="tile">4</span><span class="tile">7</span><span class="tile">1</span><span class="tile">9</span></span>
       <span class="label">Guess</span>
       <span class="digits"><span class="tile d">4</span><span class="tile i">9</span><span class="tile i">7</span><span class="tile i">1</span></span>
     </div>
-    <p style="margin:12px 0 0">That guess scores <b class="d">1 dead</b> (the 4) and <b class="i">3 injured</b> (the 9, 7 and 1).</p>
+    <p style="margin:12px 0 0">That guess scores <b class="d">✓ 1 dead</b> (the 4) and <b class="i">↔ 3 injured</b> (the 9, 7 and 1).</p>
   </section>
 </main>
 </body>
