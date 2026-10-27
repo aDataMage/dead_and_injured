@@ -92,7 +92,8 @@
     font-size: 13px; padding: 6px 12px; margin-top: 4px; background: transparent; color: var(--muted);
     border: 1px solid var(--line);
   }
-  a.restart { display: inline-block; text-decoration: none; }
+  a.restart { display: inline-block; text-decoration: none; font-weight: 600; }
+  button { -webkit-tap-highlight-color: transparent; }
   .topbar {
     flex-basis: 100%; max-width: 820px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
@@ -139,6 +140,59 @@
   .side button.small { font-size: 13px; padding: 8px 12px; margin-left: auto; }
   .side button.small:disabled { opacity: .4; cursor: default; }
   .side .clear { display: block; margin-top: 18px; font-size: 12px; color: var(--muted); background: none; padding: 0; text-decoration: underline; }
+  .tabs { display: none; }
+
+  /* Phones: history or notes fill the screen and scroll, the guess input sits at the bottom. */
+  @media (max-width: 700px) {
+    body {
+      flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0; padding: 0;
+      height: 100vh; height: 100dvh; overflow: hidden; background: var(--card);
+    }
+    main.card { display: contents; }
+    .topbar {
+      order: 0; flex: none; position: static; max-width: none; border-radius: 0; border-width: 0 0 1px;
+      padding: 8px 12px; gap: 6px 10px;
+    }
+    .topbar .digit { width: 30px; height: 34px; font-size: 17px; }
+    .topbar .legend { min-width: 0; flex-basis: 100%; }
+    .top { order: 1; padding: 10px 12px 0; }
+    h1 { font-size: 21px; }
+    .sub { order: 2; margin: 2px 12px 8px; font-size: 12px; }
+    .room, .secret, .win { order: 3; margin: 0 12px 8px; }
+    .room { padding: 6px 10px; font-size: 13px; }
+    .win { padding: 14px; }
+    .settings { order: 4; margin: 0 12px 6px; font-size: 12px; }
+    .tabs { order: 5; display: flex; border-bottom: 1px solid var(--line); }
+    .tabs button {
+      flex: 1; background: none; color: var(--muted); border-radius: 0; padding: 10px;
+      font-size: 14px; border-bottom: 2px solid transparent;
+    }
+    .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+    .rows {
+      order: 6; flex: 1; min-height: 0; max-height: none; border-top: 0;
+      padding: 10px 12px; overscroll-behavior: contain;
+    }
+    aside.side {
+      order: 6; flex: 1; min-height: 0; overflow-y: auto; max-width: none; border: 0; border-radius: 0;
+      box-shadow: none; padding: 12px; overscroll-behavior: contain;
+    }
+    aside.side h2 { display: none; }
+    body.show-notes .rows { display: none; }
+    body:not(.show-notes) aside.side { display: none; }
+    #play {
+      order: 7; display: grid; grid-template-columns: 1fr 1fr 1fr 1.3fr; gap: 6px;
+      padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--line); background: var(--card);
+    }
+    #play .slots, #play .keypad, #play .msg { grid-column: 1 / -1; margin: 0; }
+    #play .hint { display: none; }
+    .slot { height: 52px; font-size: 26px; }
+    .keypad { grid-template-columns: repeat(10, 1fr); gap: 4px; }
+    .keypad button { height: 44px; font-size: 18px; }
+    .tools { display: contents; }
+    .tools button { height: 44px; font-size: 13px; }
+    .submit { height: 44px; padding: 0; }
+  }
 </style>
 </head>
 <body>
@@ -175,7 +229,8 @@
   {{else if .NeedSecret}}
   <form method="post" class="secret" autocomplete="off">
     <p>Pick a 4-digit number with no repeated digits. Your opponent has to crack it.</p>
-    <input name="secret" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required autofocus>
+    <input name="secret" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required autofocus
+      oninput="this.value = this.value.replace(/[^0-9]/g, '')">
     <button>Set my number</button>
     {{if .SecretError}}<p class="msg err">{{.SecretError}}</p>{{end}}
   </form>
@@ -219,6 +274,11 @@
     <label><input type="checkbox" id="optNoRepeat"> Block guesses with repeated digits</label>
   </details>
   {{end}}
+
+  <div class="tabs">
+    <button type="button" id="tabHistory" class="on">History</button>
+    <button type="button" id="tabNotes">Notes</button>
+  </div>
 
   <div class="rows" id="rows">
     {{range $r := .Rows}}
@@ -494,6 +554,17 @@
     sessionStorage.removeItem("dai-secret-draft");
     if (draft && input) input.value = draft;
   } catch (e) {}
+
+  // Phone tabs: show either the guess history or the notes above the input.
+  function showTab(notesTab) {
+    document.body.classList.toggle("show-notes", notesTab);
+    document.getElementById("tabNotes").classList.toggle("on", notesTab);
+    document.getElementById("tabHistory").classList.toggle("on", !notesTab);
+    try { sessionStorage.setItem("dai-tab", notesTab ? "notes" : "history"); } catch (e) {}
+  }
+  document.getElementById("tabHistory").onclick = function () { showTab(false); };
+  document.getElementById("tabNotes").onclick = function () { showTab(true); };
+  try { if (sessionStorage.getItem("dai-tab") === "notes") showTab(true); } catch (e) {}
 
   // Keep the newest guess in view.
   var rowsEl = document.getElementById("rows");
