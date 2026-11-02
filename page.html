@@ -211,10 +211,10 @@
   @media (max-width: 700px) {
     body {
       flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0; padding: 0;
-      /* Pinned to the edges of the visible screen. Chrome on Android sizes 100vh/100dvh and page height
-         as if the address bar were hidden, which pushed the Guess button below the screen; a fixed
-         element with all edges at 0 always matches what's actually visible. */
-      position: fixed; inset: 0; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; background: var(--card);
+      /* svh = the screen height with every browser bar showing, the smallest the visible area gets.
+         Some phones still report more than they show, so overflow isn't clipped: if the input
+         doesn't fit, the page scrolls to it instead of hiding it. */
+      height: 100vh; height: 100svh; overflow-x: hidden; background: var(--card);
     }
     main.card {
       flex: 1; min-height: 0; display: flex; flex-direction: column; max-width: none;
@@ -428,6 +428,31 @@
 </dialog>
 
 <script>
+// Diagnostics for layout problems on a particular phone: open the page with ?debug=1.
+if (/[?&]debug=1/.test(location.search)) window.addEventListener("load", function () {
+  function unit(css) {
+    var d = document.createElement("div");
+    d.style.cssText = "position:absolute;visibility:hidden;width:1px;" + css;
+    document.body.appendChild(d);
+    var h = Math.round(d.getBoundingClientRect().height); d.remove(); return h;
+  }
+  var box = document.createElement("pre");
+  box.style.cssText = "position:fixed;top:0;left:0;z-index:99;margin:0;padding:6px 8px;font:11px/1.35 monospace;background:#000;color:#0f0;opacity:.9;max-width:100%;white-space:pre-wrap;pointer-events:none";
+  document.body.appendChild(box);
+  function show() {
+    var play = document.getElementById("play"), r = play ? play.getBoundingClientRect() : null;
+    box.textContent = [
+      "innerHeight " + innerHeight + "  clientHeight " + document.documentElement.clientHeight,
+      "visualViewport " + (window.visualViewport ? Math.round(visualViewport.height) : "n/a") + "  screen " + screen.height + "  dpr " + devicePixelRatio,
+      "100vh " + unit("height:100vh") + "  svh " + unit("height:100svh") + "  dvh " + unit("height:100dvh") + "  lvh " + unit("height:100lvh"),
+      "safe-area bottom " + unit("height:env(safe-area-inset-bottom,0px)"),
+      "body " + Math.round(document.body.getBoundingClientRect().height) + "  play bottom " + (r ? Math.round(r.bottom) : "n/a") + "  scrollH " + document.documentElement.scrollHeight,
+      navigator.userAgent
+    ].join("\n");
+  }
+  show(); window.addEventListener("resize", show);
+});
+
 (function () {
   var scope = "{{.Scope}}", game = scope + "-{{.Game}}";
   var history = ({{.Rows}} || []).map(function (r) { return r.Digits.join(""); });
