@@ -211,7 +211,9 @@
   @media (max-width: 700px) {
     body {
       flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0; padding: 0;
-      height: 100vh; height: 100dvh; overflow: hidden; background: var(--card);
+      /* --app-h is the measured visible height (set by the script below); some phone browsers
+         report 100vh/100dvh taller than what's on screen, which pushed the Guess button off it. */
+      height: 100vh; height: 100dvh; height: var(--app-h, 100dvh); overflow: hidden; background: var(--card);
     }
     main.card {
       flex: 1; min-height: 0; display: flex; flex-direction: column; max-width: none;
@@ -425,6 +427,17 @@
 </dialog>
 
 <script>
+// Fit the phone layout to the height that's actually visible, and keep it right as browser bars show and hide.
+(function () {
+  function fit() {
+    var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty("--app-h", Math.round(h) + "px");
+  }
+  fit();
+  window.addEventListener("resize", fit);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", fit);
+})();
+
 (function () {
   var scope = "{{.Scope}}", game = scope + "-{{.Game}}";
   var history = ({{.Rows}} || []).map(function (r) { return r.Digits.join(""); });
@@ -510,18 +523,26 @@
     if (form) changed();
   };
   var openSettings = document.getElementById("openSettings");
-  if (openSettings) openSettings.onclick = function () { dlg.showModal(); };
+  if (openSettings) openSettings.onclick = function () {
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+  };
+  // Browsers without <dialog> support: make Done close it.
+  if (!dlg.showModal) dlg.querySelector("form").onsubmit = function (e) { e.preventDefault(); dlg.removeAttribute("open"); };
 
   document.addEventListener("keydown", function (e) {
-    if (e.ctrlKey || e.metaKey || e.altKey || dlg.open) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || dlg.hasAttribute("open")) return;
     if (e.key === "Escape" && document.body.classList.contains("notes-open")) { setNotesOpen(false); return; }
     if (!form || e.target.tagName === "TEXTAREA") return;
     if (/^[0-9]$/.test(e.key)) { type(e.key); e.preventDefault(); }
     else if (e.key === "Backspace") { backspace(); e.preventDefault(); }
     else if (e.key === "Escape") { clearSlots(); }
     // Enter always submits, even if a keypad or tool button still has focus.
-    else if (e.key === "Enter" && e.target.tagName !== "SUMMARY") { form.requestSubmit(); e.preventDefault(); }
+    else if (e.key === "Enter" && e.target.tagName !== "SUMMARY") { submitGuess(); e.preventDefault(); }
   });
+
+  function submitGuess() {
+    if (form.requestSubmit) form.requestSubmit(); else document.getElementById("submit").click();
+  }
 
   function type(d) {
     var k = slots.findIndex(function (s) { return !s.locked && s.d === ""; });
