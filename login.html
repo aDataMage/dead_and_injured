@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · Dead & Injured</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --card: #ffffff; --ink: #1f2328; --muted: #6b7280; --line: #e5e1d8; --accent: #1f2328;
+    --no: #c0392b; --no-bg: #fbe9e7; --ok: #1e7a46; --ok-bg: #e3f4ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171a; --card: #1e2125; --ink: #ecedee; --muted: #9aa1a9; --line: #2e3238; --accent: #ecedee;
+      --no: #ff7b6b; --no-bg: #3a1f1c; --ok: #5fd28f; --ok-bg: #173323;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; justify-content: center; padding: 40px 16px;
+  }
+  main { width: 100%; max-width: 400px; }
+  .back { color: var(--muted); font-size: 14px; text-decoration: none; }
+  h1 { margin: 16px 0 4px; font-size: 26px; letter-spacing: -0.5px; }
+  .lead { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  input {
+    width: 100%; font-size: 16px; padding: 12px; margin-bottom: 14px; border: 2px solid var(--line);
+    border-radius: 10px; background: var(--bg); color: var(--ink);
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .buttons { display: flex; gap: 8px; margin-top: 4px; }
+  button { flex: 1; font-size: 16px; font-weight: 600; padding: 12px; border-radius: 10px; cursor: pointer; }
+  .primary { border: 0; background: var(--accent); color: var(--card); }
+  .secondary { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  .msg { border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 0 0 14px; line-height: 1.45; }
+  .err { background: var(--no-bg); color: var(--no); }
+  .info { background: var(--ok-bg); color: var(--ok); }
+  .small { font-size: 12px; color: var(--muted); margin: 14px 0 0; line-height: 1.5; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">‹ Back to menu</a>
+  <h1>Your account</h1>
+  <p class="lead">Log in to keep your solo stats on every device. New here? Enter an email and password and choose Create account.</p>
+
+  <form class="card" method="post" action="/login">
+    {{if .Error}}<p class="msg err">{{.Error}}</p>{{end}}
+    {{if .Info}}<p class="msg info">{{.Info}}</p>{{end}}
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email" required value="{{.Email}}" {{if not .Email}}autofocus{{end}}>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" minlength="6" required {{if .Email}}autofocus{{end}}>
+    <div class="buttons">
+      <button class="primary" name="action" value="login">Log in</button>
+      <button class="secondary" name="action" value="signup">Create account</button>
+    </div>
+    <p class="small">Passwords need at least 6 characters. Games you play while logged out aren't added to your account.</p>
+  </form>
+</main>
+</body>
+</html>

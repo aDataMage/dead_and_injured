@@ -68,6 +68,10 @@ type match struct {
 	start    time.Time
 	finish   time.Time
 	timedOut bool
+
+	// Saving solo results to a signed-in player's account.
+	userID   string
+	recorded bool
 }
 
 var mu sync.Mutex
@@ -98,14 +102,36 @@ func (m *match) reset() {
 	}
 	m.winner = -1
 	m.start, m.finish, m.timedOut = time.Time{}, time.Time{}, false
+	m.recorded = false
 }
 
-// checkTime ends a timed game once its time is up.
-func (m *match) checkTime() {
+// checkTime ends a timed game once its time is up, reporting whether it just ended.
+func (m *match) checkTime() bool {
 	if m.limit > 0 && !m.start.IsZero() && m.winner < 0 && !m.timedOut && time.Since(m.start) >= m.limit {
 		m.timedOut = true
 		m.finish = m.start.Add(m.limit)
+		return true
 	}
+	return false
+}
+
+// recordSolo saves a solo game to the signed-in player's account. It's called only at the moment a
+// game ends, so a game finished while logged out isn't added after logging in.
+// The save runs in the background so the page isn't held up by the network.
+func (m *match) recordSolo() {
+	if m.size != 1 || m.recorded || m.userID == "" || (m.winner < 0 && !m.timedOut) {
+		return
+	}
+	m.recorded = true
+	res := soloResult{UserID: m.userID, Mode: "classic", Won: m.winner == 0, Guesses: len(m.players[0].rows)}
+	if m.limit > 0 {
+		res.Mode = "timed"
+	}
+	if res.Won {
+		ms := m.elapsed().Milliseconds()
+		res.Ms = &ms
+	}
+	go saveSoloResult(res)
 }
 
 func (m *match) elapsed() time.Duration {
@@ -244,6 +270,11 @@ func roomCode() string {
 }
 
 func showMenu(w http.ResponseWriter, msg string) {
+	showMenuFor(w, msg, nil)
+}
+
+// showMenuFor renders the menu; for a signed-in player it includes their saved stats.
+func showMenuFor(w http.ResponseWriter, msg string, u *user) {
 	w.Header().Set("Content-Type", "text/html")
 	// Render sets RENDER_GIT_COMMIT, so the menu can show which build is live.
 	version := os.Getenv("RENDER_GIT_COMMIT")
@@ -253,17 +284,28 @@ func showMenu(w http.ResponseWriter, msg string) {
 	if version == "" {
 		version = "local"
 	}
-	menu.Execute(w, map[string]any{"Error": msg, "Version": version})
+	v := map[string]any{"Error": msg, "Version": version, "AuthOn": authOn()}
+	if u != nil {
+		v["User"] = u.Email
+		stats, err := loadSoloStats(u.ID)
+		if err != nil {
+			v["StatsError"] = true
+		}
+		v["Classic"], v["Timed"] = stats["classic"], stats["timed"]
+	}
+	menu.Execute(w, v)
 }
 
 func menuHandler(w http.ResponseWriter, r *http.Request) {
-	showMenu(w, "")
+	showMenuFor(w, "", currentUser(w, r))
 }
 
 // play handles guesses and restarts for a match, then renders it. Caller holds mu.
 func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string) {
 	m.seen = time.Now()
-	m.checkTime()
+	if m.checkTime() {
+		m.recordSolo()
+	}
 	// Quitting ends the room for both players; the opponent's page picks it up when it polls.
 	if code != "" && r.Method == http.MethodPost && r.FormValue("quit") != "" {
 		if m.quit < 0 {
@@ -305,6 +347,7 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 	}
 	if g := r.FormValue("guess"); isGuess(g) && m.ready() && m.winner < 0 && !m.timedOut {
 		m.guess(me, g)
+		m.recordSolo()
 		// Redirect so refreshing the page doesn't submit the guess again.
 		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 		return
@@ -358,6 +401,7 @@ func play(w http.ResponseWriter, r *http.Request, m *match, me int, code string)
 
 // soloHandler gives each browser its own solo game, one per mode.
 func soloHandler(w http.ResponseWriter, r *http.Request) {
+	u := currentUser(w, r) // before taking mu: this can call Supabase
 	mu.Lock()
 	defer mu.Unlock()
 	tok := ""
@@ -382,6 +426,10 @@ func soloHandler(w http.ResponseWriter, r *http.Request) {
 		m = newMatch(1)
 		m.limit = limit
 		solos[key] = m
+	}
+	m.userID = ""
+	if u != nil {
+		m.userID = u.ID
 	}
 	play(w, r, m, 0, "")
 }
@@ -531,6 +579,9 @@ func main() {
 	http.HandleFunc("/room/{code}", roomHandler)
 	http.HandleFunc("/room/{code}/state", stateHandler)
 	http.HandleFunc("POST /room/{code}/notes", notesHandler)
+	http.HandleFunc("GET /login", loginPageHandler)
+	http.HandleFunc("POST /login", authHandler)
+	http.HandleFunc("POST /logout", logoutHandler)
 
 	// Hosts like Render pick the port and pass it in PORT; locally we use 8080.
 	port := os.Getenv("PORT")

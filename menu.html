@@ -99,6 +99,14 @@
   .stat b { display: block; font: 700 18px ui-monospace, Menlo, Consolas, monospace; }
   .stat span { font-size: 11px; color: var(--muted); }
   .reset { margin: 10px 12px 0; padding: 0; font-size: 12px; color: var(--muted); background: none; border: 0; text-decoration: underline; cursor: pointer; }
+  .account { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 12px 4px; font-size: 13px; color: var(--muted); }
+  .account b { color: var(--ink); font-weight: 600; word-break: break-all; }
+  .link { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; cursor: pointer; flex: none; }
+  .signin {
+    display: block; margin: 10px 12px 0; padding: 10px 12px; border-radius: 10px; background: var(--bg);
+    color: var(--ink); font-weight: 600; font-size: 14px; text-decoration: none;
+  }
+  .signin small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
   .version { text-align: center; font-size: 11px; color: var(--muted); margin: 4px 0 0; }
   @media (max-width: 480px) {
     body { padding: 24px 12px; }
@@ -120,9 +128,38 @@
 
   <section class="card profile" id="profile">
     <h2>Your profile</h2>
+    {{if .User}}
+    <div class="account">
+      <span>Signed in as <b>{{.User}}</b></span>
+      <form method="post" action="/logout"><button class="link">Log out</button></form>
+    </div>
+    {{if .StatsError}}<p class="nostats">Couldn't load your stats right now. Try again in a moment.</p>
+    {{else if or .Classic.Played .Timed.Played}}
+    <div class="stats">
+      {{with .Classic}}{{if .Played}}
+      <p class="mode">Classic</p>
+      <div class="tiles">
+        <div class="stat"><b>{{.Played}}</b><span>games</span></div>
+        <div class="stat"><b>{{.BestText}}</b><span>fastest</span></div>
+        <div class="stat"><b>{{.AvgText}}</b><span>avg, last {{.Recent}}</span></div>
+      </div>{{end}}{{end}}
+      {{with .Timed}}{{if .Played}}
+      <p class="mode">Timed <small>· {{.Won}} of {{.Played}} cracked</small></p>
+      <div class="tiles">
+        <div class="stat"><b>{{.Played}}</b><span>games</span></div>
+        <div class="stat"><b>{{.BestText}}</b><span>fastest</span></div>
+        <div class="stat"><b>{{.AvgText}}</b><span>avg, last {{.Recent}} {{if eq .Recent 1}}win{{else}}wins{{end}}</span></div>
+      </div>{{end}}{{end}}
+    </div>
+    {{else}}<p class="nostats">Finish a solo game to start your stats.</p>{{end}}
+    {{else}}
     <p class="nostats" id="nostats">Finish a solo game to start your stats.</p>
     <div class="stats" id="stats" hidden></div>
     <button type="button" class="reset" id="resetStats" hidden>Reset stats</button>
+    {{if .AuthOn}}
+    <a class="signin" href="/login">Log in or create an account <small>to keep your stats on every device</small></a>
+    {{end}}
+    {{end}}
   </section>
 
   <section class="card">
@@ -177,6 +214,7 @@
   </section>
   <p class="version">Version {{.Version}}</p>
 </main>
+{{if not .User}}
 <script>
 // Solo stats are kept in this browser (recorded by the game page when a solo game ends).
 (function () {
@@ -212,5 +250,6 @@
   };
 })();
 </script>
+{{end}}
 </body>
 </html>

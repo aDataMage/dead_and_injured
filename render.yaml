@@ -6,3 +6,11 @@ services:
     buildCommand: go build -o app .
     startCommand: ./app
     healthCheckPath: /
+    # Supabase accounts (optional). Values are set in the Render dashboard, not here.
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
