@@ -211,9 +211,10 @@
   @media (max-width: 700px) {
     body {
       flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0; padding: 0;
-      /* --app-h is the measured visible height (set by the script below); some phone browsers
-         report 100vh/100dvh taller than what's on screen, which pushed the Guess button off it. */
-      height: 100vh; height: 100dvh; height: var(--app-h, 100dvh); overflow: hidden; background: var(--card);
+      /* Pinned to the edges of the visible screen. Chrome on Android sizes 100vh/100dvh and page height
+         as if the address bar were hidden, which pushed the Guess button below the screen; a fixed
+         element with all edges at 0 always matches what's actually visible. */
+      position: fixed; inset: 0; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; background: var(--card);
     }
     main.card {
       flex: 1; min-height: 0; display: flex; flex-direction: column; max-width: none;
@@ -427,17 +428,6 @@
 </dialog>
 
 <script>
-// Fit the phone layout to the height that's actually visible, and keep it right as browser bars show and hide.
-(function () {
-  function fit() {
-    var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    document.documentElement.style.setProperty("--app-h", Math.round(h) + "px");
-  }
-  fit();
-  window.addEventListener("resize", fit);
-  if (window.visualViewport) window.visualViewport.addEventListener("resize", fit);
-})();
-
 (function () {
   var scope = "{{.Scope}}", game = scope + "-{{.Game}}";
   var history = ({{.Rows}} || []).map(function (r) { return r.Digits.join(""); });

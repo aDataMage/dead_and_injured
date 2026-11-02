@@ -245,7 +245,15 @@ func roomCode() string {
 
 func showMenu(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "text/html")
-	menu.Execute(w, map[string]any{"Error": msg})
+	// Render sets RENDER_GIT_COMMIT, so the menu can show which build is live.
+	version := os.Getenv("RENDER_GIT_COMMIT")
+	if len(version) > 7 {
+		version = version[:7]
+	}
+	if version == "" {
+		version = "local"
+	}
+	menu.Execute(w, map[string]any{"Error": msg, "Version": version})
 }
 
 func menuHandler(w http.ResponseWriter, r *http.Request) {

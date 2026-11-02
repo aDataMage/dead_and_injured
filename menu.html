@@ -89,6 +89,7 @@
   .example .tile.i { background: var(--hurt-bg); border-color: var(--hurt-bg); color: var(--hurt); }
   .example .label { color: var(--muted); }
 
+  .version { text-align: center; font-size: 11px; color: var(--muted); margin: 4px 0 0; }
   @media (max-width: 480px) {
     body { padding: 24px 12px; }
     h1 { font-size: 28px; }
@@ -157,6 +158,7 @@
     </div>
     <p style="margin:12px 0 0">That guess scores <b class="d">✓ 1 dead</b> (the 4) and <b class="i">↔ 3 injured</b> (the 9, 7 and 1).</p>
   </section>
+  <p class="version">Version {{.Version}}</p>
 </main>
 </body>
 </html>
