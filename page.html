@@ -76,6 +76,7 @@
   .win.lost { background: var(--no-bg); color: var(--no); }
   .win h2 { margin: 0 0 6px; font-size: 22px; }
   .win p { margin: 0 0 14px; color: var(--ink); }
+  .win .best { font-weight: 700; color: var(--ok); margin-top: -6px; }
 
   /* history */
   .rows {
@@ -348,6 +349,7 @@
     {{else}}<h2>Your opponent got it first</h2>
     <p>They cracked {{if .Duel}}your number <b>{{.MySecret}}</b>{{else}}<b>{{.Secret}}</b>{{end}} in {{.WinnerGuesses}} guesses.
       {{if .Duel}}Their number was <b>{{.Secret}}</b>.{{end}}</p>{{end}}
+    {{if .Solo}}<p class="best" id="best" hidden></p>{{end}}
     <form><button class="btn" name="new" value="1" autofocus>{{if .Room}}Rematch{{else}}Play again{{end}}</button></form>
   </div>
   {{end}}
@@ -748,6 +750,38 @@ if (/[?&]debug=1/.test(location.search)) window.addEventListener("load", functio
     }
     tick();
     if (running) setInterval(tick, 250);
+  })();
+  {{end}}
+
+  // Profile stats: when a solo game ends, record it once in this browser. The menu shows the totals.
+  {{if and .Solo .Over}}
+  (function () {
+    var mode = {{.LimitSec}} ? "timed" : "classic", id = "{{.Scope}}-{{.Game}}";
+    var won = {{.Won}}, ms = {{.ElapsedMs}};
+    var stats = load("dai-stats", {});
+    stats.modes = stats.modes || {};
+    stats.ids = stats.ids || [];
+    if (stats.ids.indexOf(id) < 0) {
+      var m = stats.modes[mode] || (stats.modes[mode] = { played: 0, won: 0, best: null, recent: [] });
+      m.played++;
+      if (won) {
+        m.won++;
+        if (m.best === null || ms < m.best) {
+          if (m.best !== null) stats.newBest = id; // only a real improvement counts as a new record
+          m.best = ms;
+        }
+        m.recent.push(ms);
+        if (m.recent.length > 30) m.recent.shift();
+      }
+      stats.ids.push(id);
+      if (stats.ids.length > 50) stats.ids.shift();
+      store("dai-stats", stats);
+    }
+    if (stats.newBest === id) {
+      var best = document.getElementById("best");
+      best.textContent = "New fastest time!";
+      best.hidden = false;
+    }
   })();
   {{end}}
 
