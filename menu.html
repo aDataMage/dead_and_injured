@@ -89,6 +89,16 @@
   .example .tile.i { background: var(--hurt-bg); border-color: var(--hurt-bg); color: var(--hurt); }
   .example .label { color: var(--muted); }
 
+  .profile { padding: 8px 8px 12px; }
+  .nostats { margin: 4px 12px 6px; color: var(--muted); font-size: 14px; }
+  .stats { padding: 4px 12px 0; }
+  .mode { font-size: 13px; font-weight: 600; margin: 8px 0 6px; }
+  .mode small { color: var(--muted); font-weight: 400; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+  .stat b { display: block; font: 700 18px ui-monospace, Menlo, Consolas, monospace; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  .reset { margin: 10px 12px 0; padding: 0; font-size: 12px; color: var(--muted); background: none; border: 0; text-decoration: underline; cursor: pointer; }
   .version { text-align: center; font-size: 11px; color: var(--muted); margin: 4px 0 0; }
   @media (max-width: 480px) {
     body { padding: 24px 12px; }
@@ -107,6 +117,13 @@
   </header>
 
   {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+
+  <section class="card profile" id="profile">
+    <h2>Your profile</h2>
+    <p class="nostats" id="nostats">Finish a solo game to start your stats.</p>
+    <div class="stats" id="stats" hidden></div>
+    <button type="button" class="reset" id="resetStats" hidden>Reset stats</button>
+  </section>
 
   <section class="card">
     <h2>Solo</h2>
@@ -160,5 +177,40 @@
   </section>
   <p class="version">Version {{.Version}}</p>
 </main>
+<script>
+// Solo stats are kept in this browser (recorded by the game page when a solo game ends).
+(function () {
+  var stats;
+  try { stats = JSON.parse(localStorage.getItem("dai-stats")) || {}; } catch (e) { stats = {}; }
+  var modes = stats.modes || {};
+  function fmt(ms) { var s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + ("0" + s % 60).slice(-2); }
+  function tile(value, label) { return '<div class="stat"><b>' + value + "</b><span>" + label + "</span></div>"; }
+  function avg(list) { return list.length ? fmt(list.reduce(function (a, b) { return a + b; }, 0) / list.length) : "–"; }
+  var html = "";
+  var c = modes.classic;
+  if (c && c.played) {
+    html += '<p class="mode">Classic</p><div class="tiles">' +
+      tile(c.played, "games") + tile(c.best === null ? "–" : fmt(c.best), "fastest") +
+      tile(avg(c.recent), "avg, last " + c.recent.length) + "</div>";
+  }
+  var t = modes.timed;
+  if (t && t.played) {
+    html += '<p class="mode">Timed <small>· ' + t.won + " of " + t.played + " cracked</small></p><div class=\"tiles\">" +
+      tile(t.played, "games") + tile(t.best === null ? "–" : fmt(t.best), "fastest") +
+      tile(avg(t.recent), "avg, last " + t.recent.length + (t.recent.length === 1 ? " win" : " wins")) + "</div>";
+  }
+  if (html) {
+    document.getElementById("stats").innerHTML = html;
+    document.getElementById("stats").hidden = false;
+    document.getElementById("nostats").hidden = true;
+    document.getElementById("resetStats").hidden = false;
+  }
+  document.getElementById("resetStats").onclick = function () {
+    if (!confirm("Reset your solo stats on this device?")) return;
+    try { localStorage.removeItem("dai-stats"); } catch (e) {}
+    location.reload();
+  };
+})();
+</script>
 </body>
 </html>
