@@ -214,7 +214,9 @@
       /* svh = the screen height with every browser bar showing, the smallest the visible area gets.
          Some phones still report more than they show, so overflow isn't clipped: if the input
          doesn't fit, the page scrolls to it instead of hiding it. */
-      height: 100vh; height: 100svh; overflow-x: hidden; background: var(--card);
+      /* min-height must be reset: the desktop rule's min-height: 100vh is the address-bar-hidden height
+         on Android Chrome and silently overrode every height set here. */
+      min-height: 0; height: 100vh; height: 100svh; overflow-x: hidden; background: var(--card);
     }
     main.card {
       flex: 1; min-height: 0; display: flex; flex-direction: column; max-width: none;
